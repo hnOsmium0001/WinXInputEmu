@@ -15,7 +15,7 @@ static void ComputeXInputStateForJoystick(const JoystickInput& joystick, SHORT& 
     }
 }
 
-XINPUT_GAMEPAD UserDevice::ComputeXInputState() const noexcept {
+XINPUT_GAMEPAD UserDevice::ComputeXInputGamepad() const noexcept {
     XINPUT_GAMEPAD res;
 
     if (a.pressed) res.wButtons &= XINPUT_GAMEPAD_A;
@@ -47,5 +47,6 @@ XINPUT_GAMEPAD UserDevice::ComputeXInputState() const noexcept {
 }
 
 
-bool gUserDeviceEnabled[XUSER_MAX_COUNT] = {};
+SRWLOCK gUserDevicesLock = SRWLOCK_INIT;
+bool gUserDevicesEnabled[XUSER_MAX_COUNT] = {};
 UserDevice gUserDevices[XUSER_MAX_COUNT] = {};
