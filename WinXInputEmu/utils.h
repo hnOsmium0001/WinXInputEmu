@@ -4,29 +4,29 @@
 #include <Windows.h>
 
 struct SrwExclusiveLock {
-	SRWLOCK* theLock;
+    SRWLOCK* theLock;
 
-	SrwExclusiveLock(SRWLOCK& lock)
-		: theLock{ &lock }
-	{
-		AcquireSRWLockExclusive(theLock);
-	}
+    SrwExclusiveLock(SRWLOCK& lock)
+        : theLock{ &lock }
+    {
+        AcquireSRWLockExclusive(theLock);
+    }
 
-	~SrwExclusiveLock() {
-		ReleaseSRWLockExclusive(theLock);
-	}
+    ~SrwExclusiveLock() {
+        ReleaseSRWLockExclusive(theLock);
+    }
 };
 
 struct SrwSharedLock {
-	SRWLOCK* theLock;
+    SRWLOCK* theLock;
 
-	SrwSharedLock(SRWLOCK& lock)
-		: theLock{ &lock }
-	{
-		AcquireSRWLockShared(theLock);
-	}
+    SrwSharedLock(SRWLOCK& lock)
+        : theLock{ &lock }
+    {
+        AcquireSRWLockShared(theLock);
+    }
 
-	~SrwSharedLock() {
-		ReleaseSRWLockShared(theLock);
-	}
+    ~SrwSharedLock() {
+        ReleaseSRWLockShared(theLock);
+    }
 };
