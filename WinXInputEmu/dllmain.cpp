@@ -5,9 +5,13 @@
 
 #include "export.h"
 #include "inputdevice.h"
+#include "inputsrc.h"
 #include "shadowed.h"
 #include "userdevice.h"
 #include "utils.h"
+
+// Assigned in DllMain() -> DLL_PROCESS_ATTACH
+static HMODULE gHInstance;
 
 // Definitions for stuff in shadowed.h
 static HMODULE xinput_dll;
@@ -39,6 +43,19 @@ static void InitializeShadowedPfns() {
 	pfn_XInputSetState = (Pfn_XInputSetState)GetProcAddress(xinput_dll, "XInputSetState");
 }
 
+static INIT_ONCE gDllInitGuard = INIT_ONCE_STATIC_INIT;
+static BOOL CALLBACK DllInitHandler(PINIT_ONCE initOnce, PVOID parameter, PVOID* lpContext) {
+	InitializeShadowedPfns();
+	return TRUE;
+}
+static void EnsureDllInit() {
+	PVOID ctx;
+	BOOL status = InitOnceExecuteOnce(&gDllInitGuard, DllInitHandler, nullptr, &ctx);
+	if (!status) {
+		MessageBoxW(nullptr, L"Failed to initialize WinXInputEmu dll.", L"d", MB_OK);
+	}
+}
+
 WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
 DWORD WINAPI XInputGetAudioDeviceIds(
 	_In_ DWORD dwUserIndex,
@@ -47,6 +64,8 @@ DWORD WINAPI XInputGetAudioDeviceIds(
 	_Out_writes_opt_(*pCaptureCount) LPWSTR pCaptureDeviceId,
 	_Inout_opt_ UINT* pCaptureCount
 ) WIN_NOEXCEPT {
+	EnsureDllInit();
+
 	SrwSharedLock lock(gUserDevicesLock);
 
 	if (!gUserDevicesEnabled[dwUserIndex])
@@ -68,6 +87,8 @@ DWORD WINAPI XInputGetBatteryInformation(
 	_In_ BYTE devType,
 	_Out_ XINPUT_BATTERY_INFORMATION* pBatteryInformation
 ) WIN_NOEXCEPT {
+	EnsureDllInit();
+
 	SrwSharedLock lock(gUserDevicesLock);
 
 	if (!gUserDevicesEnabled[dwUserIndex])
@@ -97,6 +118,8 @@ DWORD WINAPI XInputGetCapabilities(
 	_In_ DWORD dwFlags,
 	_Out_ XINPUT_CAPABILITIES* pCapabilities
 ) WIN_NOEXCEPT {
+	EnsureDllInit();
+
 	SrwSharedLock lock(gUserDevicesLock);
 
 	if (!gUserDevicesEnabled[dwUserIndex])
@@ -121,6 +144,8 @@ DWORD WINAPI XInputGetKeystroke(
 	_Reserved_ DWORD dwReserved,
 	_Out_ XINPUT_KEYSTROKE* pKeystroke
 ) WIN_NOEXCEPT {
+	EnsureDllInit();
+
 	SrwSharedLock lock(gUserDevicesLock);
 
 	if (!gUserDevicesEnabled[dwUserIndex])
@@ -137,6 +162,8 @@ DWORD WINAPI XInputGetState(
 	_In_ DWORD dwUserIndex,
 	_Out_ XINPUT_STATE* pState
 ) WIN_NOEXCEPT {
+	EnsureDllInit();
+
 	SrwSharedLock lock(gUserDevicesLock);
 
 	if (!gUserDevicesEnabled[dwUserIndex])
@@ -154,6 +181,8 @@ DWORD WINAPI XInputSetState(
 	_In_ DWORD dwUserIndex,
 	_In_ XINPUT_VIBRATION* pVibration
 ) WIN_NOEXCEPT {
+	EnsureDllInit();
+
 	SrwSharedLock lock(gUserDevicesLock);
 
 	if (!gUserDevicesEnabled[dwUserIndex])
@@ -167,8 +196,8 @@ DWORD WINAPI XInputSetState(
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) noexcept {
 	switch (fdwReason) {
 	case DLL_PROCESS_ATTACH:
-		std::cout << "WinXInputEmu loaded.\n";
-		InitializeShadowedPfns();
+		// In win32 (that is, not 16-bit windows) HINSTANCE and HMODULE are the same thing
+		gHInstance = hModule;
 		break;
 
 	case DLL_THREAD_ATTACH:
@@ -176,5 +205,5 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) noexc
 	case DLL_PROCESS_DETACH:
 		break;
 	}
-	return true;
+	return TRUE;
 }

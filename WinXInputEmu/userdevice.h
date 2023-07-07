@@ -21,7 +21,7 @@ struct JoystickInput {
         float speed = 1.0f;
     } kbd;
     
-    struct {
+    struct {  
         // TODO
     } mouse;
     
