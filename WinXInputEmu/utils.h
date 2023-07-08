@@ -43,6 +43,9 @@ struct SrwSharedLock {
     }
 };
 
+std::wstring Utf8ToWide(std::string_view utf8);
+std::string WideToUtf8(std::wstring_view wide);
+
 std::wstring GetLastErrorStr() noexcept;
 
 #define LOG_DEBUG(msg, ...) OutputDebugStringW(std::format(L"[WinXInputEmu] " msg, __VA_ARGS__).c_str())
