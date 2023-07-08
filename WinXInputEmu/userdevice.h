@@ -3,12 +3,15 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+#include "config.h"
 #include "inputdevice.h"
 #include "shadowed.h"
 
 // The prefix Xi stands for XInput
 // We try to avoid using "XInput" or "XINPUT" in any names that is unrelated from the actual XInput API, to avoid confusion
 struct XiDevice {
+    const UserProfile* profile = nullptr;
+
     IdevDevice srcKbd;
     IdevDevice srcMouse;
 

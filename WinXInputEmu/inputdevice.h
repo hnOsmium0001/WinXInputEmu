@@ -22,6 +22,9 @@ std::wstring_view RawInputTypeToString(DWORD type);
 
 struct IdevDevice {
     HANDLE hDevice = INVALID_HANDLE_VALUE;
+    // TODO the GUID doesn't change for different devices at all, need a different way to identifying the device
+    //      some part of the string (particularly the last xxxx between & and #) seems to check every time the same device is reconnected, so we can't just use the whole string
+    // We might need to parse more parts of the name
     GUID guid = {};
     std::wstring name;
     RID_DEVICE_INFO info;

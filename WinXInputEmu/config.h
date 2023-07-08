@@ -1,14 +1,17 @@
 #pragma once
 
+#include <array>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <map>
 
 #include "shadowed.h"
 #include "inputdevice.h"
 
 struct UserProfile {
     struct Button {
-        KeyCode keyCode;
+        KeyCode keyCode = 0xFF;
     };
 
     struct Joystick {
@@ -51,8 +54,9 @@ struct UserProfile {
 };
 
 struct Config {
-    UserProfile profiles[XUSER_MAX_COUNT] = {};
-
-    std::string Serialize() const noexcept;
-    void Deserialize(std::string_view str) noexcept;
+    std::map<std::string, std::unique_ptr<UserProfile>, std::less<>> profiles;
+    std::array<std::string, XUSER_MAX_COUNT> xidevBindings;
 };
+
+std::string StringifyConfig(const Config& config) noexcept;
+void LoadConfig(Config& config, std::string_view str) noexcept;
