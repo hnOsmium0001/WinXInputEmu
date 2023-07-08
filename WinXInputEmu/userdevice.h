@@ -6,40 +6,22 @@
 #include "inputdevice.h"
 #include "shadowed.h"
 
-struct ButtonInput {
-    KeyCode keyCode;
-    bool pressed = false;
-};
-
-struct JoystickInput {
-    // Keep both keyboard and mouse configurations in memory because:
-    // 1. both union{} and std::variant are pain in the ass to use
-    // 2. allows user to switch betweeen both configs without losing previous values
+// The prefix Xi stands for XInput
+// We try to avoid using "XInput" or "XINPUT" in any names that is unrelated from the actual XInput API, to avoid confusion
+struct XiDevice {
+    IdevDevice srcKbd;
+    IdevDevice srcMouse;
 
     struct {
-        ButtonInput up, down, left, right;
-        float speed = 1.0f;
-    } kbd;
-    
-    struct {  
-        // TODO
-    } mouse;
-    
-    // If true, both axis will be generated from mouse movements (specifically the mouse specified by UserDevice.srcMouse)
-    bool useMouse = false;
-};
-
-struct UserDevice {
-    IdevKeyboard srcKbd;
-    IdevMouse srcMouse;
-
-    ButtonInput a, b, x, y;
-    ButtonInput lb, rb;
-    ButtonInput lt, rt;
-    ButtonInput start, back;
-    ButtonInput dpadUp, dpadDown, dpadLeft, dpadRight;
-    ButtonInput lstickBtn, rstickBtn;
-    JoystickInput lstick, rstick;
+        short lstickX, lstickY;
+        short rstickX, rstickY;
+        bool a, b, x, y;
+        bool lb, rb;
+        bool lt, rt;
+        bool start, back;
+        bool dpadUp, dpadDown, dpadLeft, dpadRight;
+        bool lstickBtn, rstickBtn;
+    } state;
 
     // This shall be incremented every time any field is updated due to input state changes
     int epoch = 0;
@@ -47,6 +29,6 @@ struct UserDevice {
     XINPUT_GAMEPAD ComputeXInputGamepad() const noexcept;
 };
 
-extern SRWLOCK gUserDevicesLock;
-extern bool gUserDevicesEnabled[XUSER_MAX_COUNT];
-extern UserDevice gUserDevices[XUSER_MAX_COUNT];
+extern SRWLOCK gXidevLock;
+extern bool gXidevEnabled[XUSER_MAX_COUNT];
+extern XiDevice gXidev[XUSER_MAX_COUNT];

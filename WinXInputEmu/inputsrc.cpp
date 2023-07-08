@@ -1,15 +1,21 @@
 #include "pch.h"
 
+#include "inputsrc.h"
+
+#include <algorithm>
 #include <cstddef>
 #include <format>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include <hidusage.h>
 
-#include "inputsrc.h"
+#include "inputdevice.h"
 
 struct IsrcSw_State {
+    std::vector<IdevDevice> devices;
+
     // For a RAWINPUT*
     std::unique_ptr<std::byte[]> rawinput;
     size_t rawinputSize = 0;
@@ -53,14 +59,52 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 
         case RIM_TYPEMOUSE: {
             const auto& kbd = ri->data.keyboard;
-        } break;
+
+            // This message is a part of a longer makecode sequence -- the actual Vkey is in another one
+            if (kbd.VKey == 255)
+                break;
+
+
+
+            break;
+        }
         }
 
         return 0;
     }
 
     case WM_INPUT_DEVICE_CHANGE: {
-        // TODO
+        HANDLE hDevice = (HANDLE)lParam;
+
+        if (wParam == GIDC_ARRIVAL) {
+            // NOTE: WM_INPUT_DEVICE_CHANGE seem to fire when RIDEV_DEVNOTIFY is first set on a window, so we get duplicate devices here as the ones collected in _glfwPollKeyboardsWin32()
+            // Filter duplicate devices
+            for (const auto& idev : s.devices) {
+                if (idev.hDevice == hDevice)
+                    return 0;
+            }
+
+            s.devices.push_back(IdevDevice::FromHANDLE(hDevice));
+
+            const auto& idev = s.devices.back();
+            LOG_DEBUG("Connected {} {}", RawInputTypeToString(idev.info.dwType), idev.name);
+        }
+        else if (wParam == GIDC_REMOVAL) {
+            // HACK: this relies on std::erase_if only visiting each element once (which is almost necessarily the case) but still technically not standard-compliant
+            //       for the behavior of "log the device being removed once"
+            std::erase_if(
+                s.devices,
+                [&](const IdevDevice& idev) {
+                    if (idev.hDevice == hDevice) {
+                        LOG_DEBUG("Disconnected {} {}", RawInputTypeToString(idev.info.dwType), idev.name);
+                        return true;
+                    }
+                    else {
+                        return false;
+                    }
+                });
+        }
+
         return 0;
     }
     }
@@ -108,12 +152,12 @@ void InputSource_RunSeparateWindow(HINSTANCE hinst) {
 
     // We don't use RIDEV_NOLEGACY because all the window manipulation (e.g. dragging the title bar) relies on the "legacy messages"
     rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-    rid[0].dwFlags = 0;
+    rid[0].dwFlags = RIDEV_DEVNOTIFY;
     rid[0].usUsage = HID_USAGE_GENERIC_KEYBOARD;
     rid[0].hwndTarget = hwnd;
 
     rid[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
-    rid[1].dwFlags = 0;
+    rid[1].dwFlags = RIDEV_DEVNOTIFY;
     rid[1].usUsage = HID_USAGE_GENERIC_MOUSE;
     rid[1].hwndTarget = hwnd;
 

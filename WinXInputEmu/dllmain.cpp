@@ -85,9 +85,9 @@ DWORD WINAPI XInputGetAudioDeviceIds(
 ) WIN_NOEXCEPT {
     EnsureDllInit();
 
-    SrwSharedLock lock(gUserDevicesLock);
+    SrwSharedLock lock(gXidevLock);
 
-    if (!gUserDevicesEnabled[dwUserIndex])
+    if (!gXidevEnabled[dwUserIndex])
         return pfn_XInputGetAudioDeviceIds(dwUserIndex, pRenderDeviceId, pRenderCount, pCaptureDeviceId, pCaptureCount);
 
     // We pretend that a headset is not connected to this emulated gamepad
@@ -108,9 +108,9 @@ DWORD WINAPI XInputGetBatteryInformation(
 ) WIN_NOEXCEPT {
     EnsureDllInit();
 
-    SrwSharedLock lock(gUserDevicesLock);
+    SrwSharedLock lock(gXidevLock);
 
-    if (!gUserDevicesEnabled[dwUserIndex])
+    if (!gXidevEnabled[dwUserIndex])
         return pfn_XInputGetBatteryInformation(dwUserIndex, devType, pBatteryInformation);
 
     *pBatteryInformation = {};
@@ -138,9 +138,9 @@ DWORD WINAPI XInputGetCapabilities(
 ) WIN_NOEXCEPT {
     EnsureDllInit();
 
-    SrwSharedLock lock(gUserDevicesLock);
+    SrwSharedLock lock(gXidevLock);
 
-    if (!gUserDevicesEnabled[dwUserIndex])
+    if (!gXidevEnabled[dwUserIndex])
         return pfn_XInputGetCapabilities(dwUserIndex, dwFlags, pCapabilities);
 
     *pCapabilities = {};
@@ -150,7 +150,7 @@ DWORD WINAPI XInputGetCapabilities(
     pCapabilities->Flags = 0;
     // TODO is this right? because this would be a functionality overlap with XInputGetState()
     //      not mentioned in the docs: logically, XInputGetCapabilities() would will all buttons and joystick values as 1 if they exist at all, not corresponding to the current input state
-    pCapabilities->Gamepad = gUserDevices[dwUserIndex].ComputeXInputGamepad();
+    pCapabilities->Gamepad = gXidev[dwUserIndex].ComputeXInputGamepad();
     pCapabilities->Vibration = {};
 
     return ERROR_SUCCESS;
@@ -164,9 +164,9 @@ DWORD WINAPI XInputGetKeystroke(
 ) WIN_NOEXCEPT {
     EnsureDllInit();
 
-    SrwSharedLock lock(gUserDevicesLock);
+    SrwSharedLock lock(gXidevLock);
 
-    if (!gUserDevicesEnabled[dwUserIndex])
+    if (!gXidevEnabled[dwUserIndex])
         return pfn_XInputGetKeystroke(dwUserIndex, dwReserved, pKeystroke);
 
     // TODO this would require us to maintain a list of input events
@@ -182,12 +182,12 @@ DWORD WINAPI XInputGetState(
 ) WIN_NOEXCEPT {
     EnsureDllInit();
 
-    SrwSharedLock lock(gUserDevicesLock);
+    SrwSharedLock lock(gXidevLock);
 
-    if (!gUserDevicesEnabled[dwUserIndex])
+    if (!gXidevEnabled[dwUserIndex])
         return pfn_XInputGetState(dwUserIndex, pState);
 
-    const auto& dev = gUserDevices[dwUserIndex];
+    const auto& dev = gXidev[dwUserIndex];
     pState->dwPacketNumber = dev.epoch;
     pState->Gamepad = dev.ComputeXInputGamepad();
 
@@ -201,9 +201,9 @@ DWORD WINAPI XInputSetState(
 ) WIN_NOEXCEPT {
     EnsureDllInit();
 
-    SrwSharedLock lock(gUserDevicesLock);
+    SrwSharedLock lock(gXidevLock);
 
-    if (!gUserDevicesEnabled[dwUserIndex])
+    if (!gXidevEnabled[dwUserIndex])
         return pfn_XInputSetState(dwUserIndex, pVibration);
 
     // Ignore all vibration states, as we don't really have a way to make keyboards and mouse vibrate :P
@@ -216,6 +216,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) noexc
     case DLL_PROCESS_ATTACH:
         // In win32 (that is, not 16-bit windows) HINSTANCE and HMODULE are the same thing
         gHInstance = hModule;
+
+        InitKeyCodeConv();
+
         break;
 
     case DLL_THREAD_ATTACH:

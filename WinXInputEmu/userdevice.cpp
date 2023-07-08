@@ -2,51 +2,41 @@
 
 #include "userdevice.h"
 
-static void ComputeXInputStateForJoystick(const JoystickInput& joystick, SHORT& outX, SHORT& outY) {
-    constexpr int kStickMaxVal = 32767;
-    int stickActualVal = (int)(kStickMaxVal * joystick.kbd.speed);
-
-    if (joystick.useMouse) {
-        // TODO
-    }
-    else {
-        outX = (joystick.kbd.left.pressed ? stickActualVal : 0) + (joystick.kbd.right.pressed ? -stickActualVal : 0);
-        outY = (joystick.kbd.up.pressed ? stickActualVal : 0) + (joystick.kbd.down.pressed ? -stickActualVal : 0);
-    }
-}
-
-XINPUT_GAMEPAD UserDevice::ComputeXInputGamepad() const noexcept {
+XINPUT_GAMEPAD XiDevice::ComputeXInputGamepad() const noexcept {
     XINPUT_GAMEPAD res;
+    const auto& s = this->state;
 
-    if (a.pressed) res.wButtons &= XINPUT_GAMEPAD_A;
-    if (b.pressed) res.wButtons &= XINPUT_GAMEPAD_B;
-    if (x.pressed) res.wButtons &= XINPUT_GAMEPAD_X;
-    if (y.pressed) res.wButtons &= XINPUT_GAMEPAD_Y;
+    if (s.a) res.wButtons &= XINPUT_GAMEPAD_A;
+    if (s.b) res.wButtons &= XINPUT_GAMEPAD_B;
+    if (s.x) res.wButtons &= XINPUT_GAMEPAD_X;
+    if (s.y) res.wButtons &= XINPUT_GAMEPAD_Y;
 
-    if (lb.pressed) res.wButtons &= XINPUT_GAMEPAD_LEFT_SHOULDER;
-    if (rb.pressed) res.wButtons &= XINPUT_GAMEPAD_RIGHT_SHOULDER;
+    if (s.lb) res.wButtons &= XINPUT_GAMEPAD_LEFT_SHOULDER;
+    if (s.rb) res.wButtons &= XINPUT_GAMEPAD_RIGHT_SHOULDER;
 
-    res.bLeftTrigger = lt.pressed ? 255 : 0;
-    res.bRightTrigger = rt.pressed ? 255 : 0;
+    res.bLeftTrigger = s.lt ? 255 : 0;
+    res.bRightTrigger = s.rt ? 255 : 0;
 
-    if (start.pressed) res.wButtons &= XINPUT_GAMEPAD_START;
-    if (back.pressed) res.wButtons &= XINPUT_GAMEPAD_BACK;
+    if (s.start) res.wButtons &= XINPUT_GAMEPAD_START;
+    if (s.back) res.wButtons &= XINPUT_GAMEPAD_BACK;
 
-    if (dpadUp.pressed) res.wButtons &= XINPUT_GAMEPAD_DPAD_UP;
-    if (dpadDown.pressed) res.wButtons &= XINPUT_GAMEPAD_DPAD_DOWN;
-    if (dpadLeft.pressed) res.wButtons &= XINPUT_GAMEPAD_DPAD_LEFT;
-    if (dpadRight.pressed) res.wButtons &= XINPUT_GAMEPAD_DPAD_RIGHT;
+    if (s.dpadUp) res.wButtons &= XINPUT_GAMEPAD_DPAD_UP;
+    if (s.dpadDown) res.wButtons &= XINPUT_GAMEPAD_DPAD_DOWN;
+    if (s.dpadLeft) res.wButtons &= XINPUT_GAMEPAD_DPAD_LEFT;
+    if (s.dpadRight) res.wButtons &= XINPUT_GAMEPAD_DPAD_RIGHT;
 
-    if (lstickBtn.pressed) res.wButtons &= XINPUT_GAMEPAD_LEFT_THUMB;
-    if (rstickBtn.pressed) res.wButtons &= XINPUT_GAMEPAD_RIGHT_THUMB;
+    if (s.lstickBtn) res.wButtons &= XINPUT_GAMEPAD_LEFT_THUMB;
+    if (s.rstickBtn) res.wButtons &= XINPUT_GAMEPAD_RIGHT_THUMB;
 
-    ComputeXInputStateForJoystick(lstick, res.sThumbLX, res.sThumbLY);
-    ComputeXInputStateForJoystick(rstick, res.sThumbRX, res.sThumbRY);
+    res.sThumbLX = s.lstickX;
+    res.sThumbLY = s.lstickY;
+    res.sThumbRX = s.rstickX;
+    res.sThumbRY = s.rstickY;
 
     return res;
 }
 
 
-SRWLOCK gUserDevicesLock = SRWLOCK_INIT;
-bool gUserDevicesEnabled[XUSER_MAX_COUNT] = {};
-UserDevice gUserDevices[XUSER_MAX_COUNT] = {};
+SRWLOCK gXidevLock = SRWLOCK_INIT;
+bool gXidevEnabled[XUSER_MAX_COUNT] = {};
+XiDevice gXidev[XUSER_MAX_COUNT] = {};
