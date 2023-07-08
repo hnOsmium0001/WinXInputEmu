@@ -29,7 +29,7 @@ Pfn_XInputSetState pfn_XInputSetState = nullptr;
 static void InitializeShadowedPfns() {
     xinput_dll = LoadLibraryW(L"XInput1_4.dll");
     if (!xinput_dll) {
-        OutputDebugStringW(std::format(L"Error opening XInput1_4.dll, code: {}", GetLastError()).c_str());
+        LOG_DEBUG(L"Error opening XInput1_4.dll: {}", GetLastErrorStr());
         return;
     }
 
@@ -43,16 +43,35 @@ static void InitializeShadowedPfns() {
     pfn_XInputSetState = (Pfn_XInputSetState)GetProcAddress(xinput_dll, "XInputSetState");
 }
 
+static HANDLE gWorkingThread;
+static DWORD gWorkingThreadId;
+static DWORD WINAPI WorkingThreadFunction(LPVOID lpParam) {
+    InputSource_RunSeparateWindow(gHInstance);
+    return 0;
+}
+
+static void StartWorkingThread() {
+    gWorkingThread = CreateThread(nullptr, 0, WorkingThreadFunction, nullptr, 0, &gWorkingThreadId);
+    if (gWorkingThread == nullptr) {
+        LOG_DEBUG(L"Failed to launch working thread");
+    }
+
+    // TODO gracefully exit the thread when dll unloads
+    //WaitForSingleObject(gWorkingThread, INFINITE);
+    //CloseHandle(gWorkingThread);
+}
+
 static INIT_ONCE gDllInitGuard = INIT_ONCE_STATIC_INIT;
 static BOOL CALLBACK DllInitHandler(PINIT_ONCE initOnce, PVOID parameter, PVOID* lpContext) {
     InitializeShadowedPfns();
+    StartWorkingThread();
     return TRUE;
 }
 static void EnsureDllInit() {
     PVOID ctx;
     BOOL status = InitOnceExecuteOnce(&gDllInitGuard, DllInitHandler, nullptr, &ctx);
     if (!status) {
-        OutputDebugStringW(L"Failed to execute INIT_ONCE");
+        LOG_DEBUG(L"Failed to execute INIT_ONCE");
     }
 }
 
@@ -96,8 +115,7 @@ DWORD WINAPI XInputGetBatteryInformation(
 
     *pBatteryInformation = {};
 
-    switch (devType)
-    {
+    switch (devType) {
     case BATTERY_DEVTYPE_GAMEPAD:
         pBatteryInformation->BatteryType = BATTERY_TYPE_WIRED;
         pBatteryInformation->BatteryLevel = BATTERY_LEVEL_FULL;
