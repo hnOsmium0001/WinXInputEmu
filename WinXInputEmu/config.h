@@ -6,6 +6,8 @@
 #include <string_view>
 #include <map>
 
+#include <toml++/toml.h>
+
 #include "shadowed.h"
 #include "inputdevice.h"
 
@@ -58,5 +60,8 @@ struct Config {
     std::array<std::string, XUSER_MAX_COUNT> xidevBindings;
 };
 
-std::string StringifyConfig(const Config& config) noexcept;
-void LoadConfig(Config& config, std::string_view str) noexcept;
+toml::table StringifyConfig(const Config&) noexcept;
+Config LoadConfig(const toml::table&) noexcept;
+
+void BindProfileToGamepad(Config& config, int userIndex, std::string_view profileName);
+void BindAllConfigGamepadBindings(const Config& config);

@@ -1,6 +1,9 @@
 #include "pch.h"
 
+#include <filesystem>
 #include <format>
+#include <fstream>
+#include <iostream>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -43,10 +46,39 @@ static void InitializeShadowedPfns() {
     pfn_XInputSetState = (Pfn_XInputSetState)GetProcAddress(xinput_dll, "XInputSetState");
 }
 
+static toml::table ParseDesignatedConfigFile() {
+    // Load config from the designated config file
+    WCHAR buf[MAX_PATH];
+    DWORD numChars = GetModuleFileNameW(gHInstance, buf, MAX_PATH);
+    auto dllPath = std::filesystem::path(buf, buf + numChars).remove_filename() / L"WinXInputEmu.toml";
+
+    LOG_DEBUG(L"Config path: {}", dllPath.native());
+
+    // Copied from toml++, except always uses stream to parse
+    std::ifstream file;
+    char fileBuffer[sizeof(void*) * 1024];
+    file.rdbuf()->pubsetbuf(fileBuffer, sizeof(fileBuffer));
+    // This should use the -W version of CreateFile, etc. because open() takes an overload that handles fs::path directly
+    // Unlike toml++, which doesn't take fs::path, so we have to pass in std::wstring, which then gets converted to UTF-8 nicely but then relies on the codepage for the -A versions
+    file.open(dllPath, std::ifstream::in | std::ifstream::binary | std::ifstream::ate);
+    if (!file.is_open()) {
+        LOG_DEBUG("Config {} could not be opened for reading", dllPath.native());
+        MessageBoxW(nullptr, L"Config file could not be loaded, WinXInputEmu will use an empty one.\nThis will stop all behaviors and forward all API calls to the system DLL.", L"WinXInputEmu", MB_OK | MB_ICONERROR);
+        return {};
+    }
+
+    return toml::parse(file);
+}
+
 static HANDLE gWorkingThread;
 static DWORD gWorkingThreadId;
 static DWORD WINAPI WorkingThreadFunction(LPVOID lpParam) {
-    InputSource_RunSeparateWindow(gHInstance);
+    auto config = LoadConfig(ParseDesignatedConfigFile());
+    BindAllConfigGamepadBindings(config);
+
+    // TODO replace this with a config UI window
+    InputSource_RunSeparateWindow(gHInstance, std::move(config));
+
     return 0;
 }
 

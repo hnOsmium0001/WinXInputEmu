@@ -13,13 +13,94 @@
 
 #include "inputdevice.h"
 
+void InputTranslationStruct::Clear() {
+    for (int i = 0; i < 0xFF; ++i) {
+        for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+            btns[i][userIndex] = XiButton::None;
+        }
+    }
+}
+
+void InputTranslationStruct::PopulateFromConfig(const Config& config) {
+    Clear();
+
+    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+
+    }
+}
+
 struct IsrcSw_State {
     std::vector<IdevDevice> devices;
+
+    Config config = {};
+    InputTranslationStruct its = {};
 
     // For a RAWINPUT*
     std::unique_ptr<std::byte[]> rawinput;
     size_t rawinputSize = 0;
 };
+
+static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
+    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        auto& dev = gXidev[userIndex];
+        auto& extra = its.xidevExtraInfo[userIndex];
+
+        bool recompute_lstick = false;
+        bool recompute_rstick = false;
+
+        switch (its.btns[userIndex][vkey]) {
+            using enum XiButton;
+        case A: dev.a = pressed; break;
+        case B: dev.b = pressed; break;
+        case X: dev.x = pressed; break;
+        case Y: dev.y = pressed; break;
+
+        case LB: dev.lb = pressed; break;
+        case RB: dev.rb = pressed; break;
+        case LT: dev.lt = pressed; break;
+        case RT: dev.rt = pressed; break;
+
+        case Start: dev.start = pressed; break;
+        case Back: dev.back = pressed; break;
+
+        case DpadUp: dev.dpadUp = pressed; break;
+        case DpadDown: dev.dpadDown = pressed; break;
+        case DpadLeft: dev.dpadLeft = pressed; break;
+        case DpadRight: dev.dpadRight = pressed; break;
+
+        case LStickBtn: dev.lstickBtn = pressed; break;
+        case RStickBtn: dev.rstickBtn = pressed; break;
+
+            // NOTE: we assume that if any key is setup for the joystick directions, it's on keyboard mode
+            //       that is, we rely on the translation struct being populated from the current user config correctly
+#define STICKBUTTON(THEENUM, STICK, DIR) case THEENUM: recompute_##STICK = true; extra.STICK.DIR = pressed; break;
+            STICKBUTTON(LStickUp, lstick, up);
+            STICKBUTTON(LStickDown, lstick, down);
+            STICKBUTTON(LStickLeft, lstick, left);
+            STICKBUTTON(LStickRight, lstick, right);
+            STICKBUTTON(RStickUp, rstick, up);
+            STICKBUTTON(RStickDown, rstick, down);
+            STICKBUTTON(RStickLeft, rstick, left);
+            STICKBUTTON(RStickRight, rstick, right);
+#undef STICKBUTTON
+
+        case None: break;
+        }
+
+        constexpr int kStickMaxVal = 32767;
+        if (recompute_lstick) {
+            // Stick's actual value per user's speed setting
+            int val = (int)(kStickMaxVal * dev.profile->lstick.kbd.speed);
+            dev.lstickX = (extra.lstick.left ? val : 0) + (extra.lstick.right ? -val : 0);
+            dev.lstickY = (extra.lstick.up ? val : 0) + (extra.lstick.down ? -val : 0);
+        }
+        if (recompute_rstick) {
+            int val = (int)(kStickMaxVal * dev.profile->rstick.kbd.speed);
+            dev.rstickX = (extra.rstick.left ? val : 0) + (extra.rstick.right ? -val : 0);
+            dev.rstickY = (extra.rstick.up ? val : 0) + (extra.rstick.down ? -val : 0);
+        }
+    }
+}
 
 LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) noexcept {
     auto& s = *(IsrcSw_State*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -51,23 +132,27 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         }
         RAWINPUT* ri = (RAWINPUT*)s.rawinput.get();
 
+        // We are going to modify/push data onto XiDevice's below, from this input event
+        SrwExclusiveLock lock(gXidevLock);
+
         switch (ri->header.dwType) {
-        case RIM_TYPEKEYBOARD: {
+        case RIM_TYPEMOUSE: {
             const auto& mouse = ri->data.mouse;
             // TODO
         } break;
 
-        case RIM_TYPEMOUSE: {
+        case RIM_TYPEKEYBOARD: {
             const auto& kbd = ri->data.keyboard;
 
             // This message is a part of a longer makecode sequence -- the actual Vkey is in another one
-            if (kbd.VKey == 255)
+            if (kbd.VKey == 0xFF)
                 break;
 
+            bool press = !(kbd.Flags & RI_KEY_BREAK);
 
-
-            break;
-        }
+            assert(kbd.VKey <= 0xFF);
+            HandleKeyPress((BYTE)kbd.VKey, press, s.its, s.config);
+        } break;
         }
 
         return 0;
@@ -112,7 +197,7 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
-void InputSource_RunSeparateWindow(HINSTANCE hinst) {
+void InputSource_RunSeparateWindow(HINSTANCE hinst, Config config) {
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = IsrcSw_WindowProc;
@@ -143,7 +228,9 @@ void InputSource_RunSeparateWindow(HINSTANCE hinst) {
         return;
     }
 
-    IsrcSw_State wndState;
+    IsrcSw_State wndState{
+        .config = std::move(config),
+    };
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)&wndState);
 
     ShowWindow(hwnd, SW_SHOW);
@@ -164,6 +251,8 @@ void InputSource_RunSeparateWindow(HINSTANCE hinst) {
     if (RegisterRawInputDevices(rid, std::size(rid), sizeof(RAWINPUTDEVICE)) == false) {
         return;
     }
+
+    LOG_DEBUG(L"Starting working thread's message pump");
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {

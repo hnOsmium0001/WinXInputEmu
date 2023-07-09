@@ -4,26 +4,26 @@
 
 #include <algorithm>
 #include <format>
-#include <toml++/toml.h>
 
 #include "userdevice.h"
 
 using namespace std::literals;
 
-std::string StringifyConfig(const Config& config)  noexcept {
-    return ""; // TODO
+toml::table StringifyConfig(const Config& config)  noexcept {
+    return {}; // TODO
 }
 
-static void ReadButton(toml::node_view<toml::node> t, UserProfile::Button& btn) {
+static void ReadButton(toml::node_view<const toml::node> t, UserProfile::Button& btn) {
     btn.keyCode = KeyCodeFromString(t.value_or<std::string_view>(""sv)).value_or(0xFF);
 }
 
-static void ReadJoystick(toml::node_view<toml::node> t, UserProfile::Joystick& js, UserProfile::Button& jsBtn) {
+static void ReadJoystick(toml::node_view<const toml::node> t, UserProfile::Joystick& js, UserProfile::Button& jsBtn) {
     ReadButton(t["Button"], jsBtn);
 
     if (const auto& v = t["Type"];
         v == "keyboard")
     {
+        js.useMouse = false;
         ReadButton(t["Up"], js.kbd.up);
         ReadButton(t["Down"], js.kbd.down);
         ReadButton(t["Left"], js.kbd.left);
@@ -31,15 +31,17 @@ static void ReadJoystick(toml::node_view<toml::node> t, UserProfile::Joystick& j
         js.kbd.speed = std::clamp(t["Speed"].value_or<float>(1.0f), 0.0f, 1.0f);
     }
     else if (v == "mouse") {
+        js.useMouse = true;
         // TODO
+    }
+    else {
+        // Resets to inactive mode
+        js = {};
     }
 }
 
-void LoadConfig(Config& config, std::string_view str) noexcept {
-    config.profiles.clear();
-    config.xidevBindings = {};
-
-    auto toml = toml::parse(str);
+Config LoadConfig(const toml::table& toml) noexcept {
+    Config config;
 
     auto& tomlProfiles = *toml["UserProfiles"].as_array();
     for (auto& e : tomlProfiles) {
@@ -60,8 +62,8 @@ void LoadConfig(Config& config, std::string_view str) noexcept {
         ReadButton(tomlProfile["RB"], profile->rb);
         ReadButton(tomlProfile["LT"], profile->lt);
         ReadButton(tomlProfile["RT"], profile->rt);
-        ReadButton(tomlProfile["A"], profile->start);
-        ReadButton(tomlProfile["A"], profile->back);
+        ReadButton(tomlProfile["Start"], profile->start);
+        ReadButton(tomlProfile["Back"], profile->back);
         ReadButton(tomlProfile["DpadUp"], profile->dpadUp);
         ReadButton(tomlProfile["DpadDown"], profile->dpadDown);
         ReadButton(tomlProfile["DpadLeft"], profile->dpadLeft);
@@ -72,23 +74,33 @@ void LoadConfig(Config& config, std::string_view str) noexcept {
         config.profiles.try_emplace(name.value(), std::move(profile));
     }
 
-    {
-        SrwExclusiveLock lock(gXidevLock);
-        for (int i = 0; i < XUSER_MAX_COUNT; ++i) {
-            auto key = std::format("Gamepad{}", i);
-            auto profileName = toml["Binding"][key].value<std::string_view>();
-            if (profileName.has_value()) {
-                auto iter = config.profiles.find(profileName);
-                if (iter != config.profiles.end()) {
-                    gXidevEnabled[i] = true;
-                    gXidev[i] = {};
-                    gXidev[i].profile = iter->second.get();
-                    continue;
-                }
-            }
+    for (int i = 0; i < XUSER_MAX_COUNT; ++i) {
+        auto key = std::format("Gamepad{}", i);
+        config.xidevBindings[i] = toml["Binding"][key].value_or<std::string>(""s);
+    }
 
-            gXidevEnabled[i] = false;
-            gXidev[i] = {};
-        }
+    return config;
+}
+
+void BindProfileToGamepad(Config& config, int userIndex, std::string_view profileName) {
+    if (userIndex < 0 || userIndex >= XUSER_MAX_COUNT)
+        return;
+
+    auto iter = config.profiles.find(profileName);
+    if (iter != config.profiles.end()) {
+        SrwExclusiveLock lock(gXidevLock);
+        config.xidevBindings[userIndex] = std::string(profileName);
+        gXidevEnabled[userIndex] = true;
+        gXidev[userIndex] = {};
+        gXidev[userIndex].profile = iter->second.get();
+    }
+}
+
+void BindAllConfigGamepadBindings(const Config& config) {
+    SrwExclusiveLock lock(gXidevLock);
+    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        gXidevEnabled[userIndex] = true;
+        gXidev[userIndex] = {};
+        gXidev[userIndex].profile = config.profiles.at(config.xidevBindings[userIndex]).get();
     }
 }
