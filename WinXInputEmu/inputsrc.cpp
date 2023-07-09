@@ -42,8 +42,8 @@ struct IsrcSw_State {
 
 static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
-        auto& dev = gXidev[userIndex];
-        auto& extra = its.xidevExtraInfo[userIndex];
+        auto& dev = gXiGamepads[userIndex];
+        auto& extra = its.xiGamepadExtraInfo[userIndex];
 
         bool recompute_lstick = false;
         bool recompute_rstick = false;
@@ -132,8 +132,8 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         }
         RAWINPUT* ri = (RAWINPUT*)s.rawinput.get();
 
-        // We are going to modify/push data onto XiDevice's below, from this input event
-        SrwExclusiveLock lock(gXidevLock);
+        // We are going to modify/push data onto XiGamepad's below, from this input event
+        SrwExclusiveLock lock(gXiGamepadsLock);
 
         switch (ri->header.dwType) {
         case RIM_TYPEMOUSE: {

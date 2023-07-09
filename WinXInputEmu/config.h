@@ -42,7 +42,7 @@ struct UserProfile {
             bool invertYAxis = false;
         } mouse;
 
-        // If true, both axis will be generated from mouse movements (specifically the mouse specified by XiDevice.srcMouse)
+        // If true, both axis will be generated from mouse movements (specifically the mouse specified by XiGamepad.srcMouse)
         bool useMouse = false;
     };
 
@@ -57,7 +57,7 @@ struct UserProfile {
 
 struct Config {
     std::map<std::string, std::unique_ptr<UserProfile>, std::less<>> profiles;
-    std::array<std::string, XUSER_MAX_COUNT> xidevBindings;
+    std::array<std::string, XUSER_MAX_COUNT> xiGamepadBindings;
 };
 
 toml::table StringifyConfig(const Config&) noexcept;

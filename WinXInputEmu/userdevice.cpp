@@ -2,7 +2,7 @@
 
 #include "userdevice.h"
 
-XINPUT_GAMEPAD XiDevice::ComputeXInputGamepad() const noexcept {
+XINPUT_GAMEPAD XiGamepad::ComputeXInputGamepad() const noexcept {
     XINPUT_GAMEPAD res;
 
     if (a) res.wButtons &= XINPUT_GAMEPAD_A;
@@ -36,6 +36,6 @@ XINPUT_GAMEPAD XiDevice::ComputeXInputGamepad() const noexcept {
 }
 
 
-SRWLOCK gXidevLock = SRWLOCK_INIT;
-bool gXidevEnabled[XUSER_MAX_COUNT] = {};
-XiDevice gXidev[XUSER_MAX_COUNT] = {};
+SRWLOCK gXiGamepadsLock = SRWLOCK_INIT;
+bool gXiGamepadsEnabled[XUSER_MAX_COUNT] = {};
+XiGamepad gXiGamepads[XUSER_MAX_COUNT] = {};

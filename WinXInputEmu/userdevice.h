@@ -9,7 +9,7 @@
 
 // The prefix Xi stands for XInput
 // We try to avoid using "XInput" or "XINPUT" in any names that is unrelated from the actual XInput API, to avoid confusion
-struct XiDevice {
+struct XiGamepad {
     const UserProfile* profile = nullptr;
 
     IdevDevice srcKbd;
@@ -30,6 +30,6 @@ struct XiDevice {
     XINPUT_GAMEPAD ComputeXInputGamepad() const noexcept;
 };
 
-extern SRWLOCK gXidevLock;
-extern bool gXidevEnabled[XUSER_MAX_COUNT];
-extern XiDevice gXidev[XUSER_MAX_COUNT];
+extern SRWLOCK gXiGamepadsLock;
+extern bool gXiGamepadsEnabled[XUSER_MAX_COUNT];
+extern XiGamepad gXiGamepads[XUSER_MAX_COUNT];

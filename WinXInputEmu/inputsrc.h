@@ -25,7 +25,7 @@ struct InputTranslationStruct {
 
             // Mouse mode stuff
         } lstick, rstick;
-    } xidevExtraInfo[XUSER_MAX_COUNT];
+    } xiGamepadExtraInfo[XUSER_MAX_COUNT];
 
     // VK_xxx is BYTE, max 255 values
     // NOTE: XiButton::COUNT is used to indicate "this mapping is not bound"

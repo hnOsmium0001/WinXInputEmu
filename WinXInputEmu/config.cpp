@@ -76,7 +76,7 @@ Config LoadConfig(const toml::table& toml) noexcept {
 
     for (int i = 0; i < XUSER_MAX_COUNT; ++i) {
         auto key = std::format("Gamepad{}", i);
-        config.xidevBindings[i] = toml["Binding"][key].value_or<std::string>(""s);
+        config.xiGamepadBindings[i] = toml["Binding"][key].value_or<std::string>(""s);
     }
 
     return config;
@@ -88,19 +88,19 @@ void BindProfileToGamepad(Config& config, int userIndex, std::string_view profil
 
     auto iter = config.profiles.find(profileName);
     if (iter != config.profiles.end()) {
-        SrwExclusiveLock lock(gXidevLock);
-        config.xidevBindings[userIndex] = std::string(profileName);
-        gXidevEnabled[userIndex] = true;
-        gXidev[userIndex] = {};
-        gXidev[userIndex].profile = iter->second.get();
+        SrwExclusiveLock lock(gXiGamepadsLock);
+        config.xiGamepadBindings[userIndex] = std::string(profileName);
+        gXiGamepadsEnabled[userIndex] = true;
+        gXiGamepads[userIndex] = {};
+        gXiGamepads[userIndex].profile = iter->second.get();
     }
 }
 
 void BindAllConfigGamepadBindings(const Config& config) {
-    SrwExclusiveLock lock(gXidevLock);
+    SrwExclusiveLock lock(gXiGamepadsLock);
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
-        gXidevEnabled[userIndex] = true;
-        gXidev[userIndex] = {};
-        gXidev[userIndex].profile = config.profiles.at(config.xidevBindings[userIndex]).get();
+        gXiGamepadsEnabled[userIndex] = true;
+        gXiGamepads[userIndex] = {};
+        gXiGamepads[userIndex].profile = config.profiles.at(config.xiGamepadBindings[userIndex]).get();
     }
 }
