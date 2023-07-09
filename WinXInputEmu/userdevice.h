@@ -15,19 +15,17 @@ struct XiDevice {
     IdevDevice srcKbd;
     IdevDevice srcMouse;
 
-    struct {
-        short lstickX, lstickY;
-        short rstickX, rstickY;
-        bool a, b, x, y;
-        bool lb, rb;
-        bool lt, rt;
-        bool start, back;
-        bool dpadUp, dpadDown, dpadLeft, dpadRight;
-        bool lstickBtn, rstickBtn;
-    } state;
-
     // This shall be incremented every time any field is updated due to input state changes
     int epoch = 0;
+
+    short lstickX, lstickY;
+    short rstickX, rstickY;
+    bool a, b, x, y;
+    bool lb, rb;
+    bool lt, rt;
+    bool start, back;
+    bool dpadUp, dpadDown, dpadLeft, dpadRight;
+    bool lstickBtn, rstickBtn;
 
     XINPUT_GAMEPAD ComputeXInputGamepad() const noexcept;
 };
