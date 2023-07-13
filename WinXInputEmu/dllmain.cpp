@@ -31,7 +31,10 @@ Pfn_XInputGetState pfn_XInputGetState = nullptr;
 Pfn_XInputSetState pfn_XInputSetState = nullptr;
 
 static void InitializeShadowedPfns() {
-    xinput_dll = LoadLibraryW(L"XInput1_4.dll");
+    // Using LoadLibraryExW() with LOAD_LIBRARY_SEARCH_SYSTEM32 only doesn't seem to work -- it still found our XInput1_4.dll (if our name is indeed this)
+    // On 32-bit process, "System32" is automatically redirected to SysWOW64
+    // On 64-bit process, "System32" will work in place
+    xinput_dll = LoadLibraryW(L"C:/Windows/System32/XInput1_4.dll");
     if (!xinput_dll) {
         LOG_DEBUG(L"Error opening XInput1_4.dll: {}", GetLastErrorStr());
         return;
