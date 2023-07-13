@@ -111,6 +111,14 @@ static void EnsureDllInit() {
     }
 }
 
+// This function is deprecated, but we still provide it in case the game uses it
+WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
+void WINAPI XInputEnable(
+    BOOL enable
+) WIN_NOEXCEPT {
+    EnsureDllInit();
+}
+
 WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
 DWORD WINAPI XInputGetAudioDeviceIds(
     _In_ DWORD dwUserIndex,
