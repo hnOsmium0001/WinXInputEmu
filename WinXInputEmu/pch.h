@@ -9,8 +9,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <initializer_list>
 #include <iostream>
 #include <map>
@@ -18,6 +18,7 @@
 #include <optional>
 #include <set>
 #include <span>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -31,8 +32,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include <hidusage.h>
 #include <Rpc.h>
+#include <hidusage.h>
 
 ////////// 3rd party headers //////////
 
