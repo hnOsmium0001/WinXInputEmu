@@ -112,15 +112,13 @@ static void EnsureDllInit() {
 }
 
 // This function is deprecated, but we still provide it in case the game uses it
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-void WINAPI XInputEnable(
+XI_API_FUNC void WINAPI XInputEnable(
     BOOL enable
 ) WIN_NOEXCEPT {
     EnsureDllInit();
 }
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetAudioDeviceIds(
+XI_API_FUNC DWORD WINAPI XInputGetAudioDeviceIds(
     _In_ DWORD dwUserIndex,
     _Out_writes_opt_(*pRenderCount) LPWSTR pRenderDeviceId,
     _Inout_opt_ UINT* pRenderCount,
@@ -145,8 +143,7 @@ DWORD WINAPI XInputGetAudioDeviceIds(
     return ERROR_SUCCESS;
 }
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetBatteryInformation(
+XI_API_FUNC DWORD WINAPI XInputGetBatteryInformation(
     _In_ DWORD dwUserIndex,
     _In_ BYTE devType,
     _Out_ XINPUT_BATTERY_INFORMATION* pBatteryInformation
@@ -176,8 +173,7 @@ DWORD WINAPI XInputGetBatteryInformation(
     return ERROR_SUCCESS;
 }
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetCapabilities(
+XI_API_FUNC DWORD WINAPI XInputGetCapabilities(
     _In_ DWORD dwUserIndex,
     _In_ DWORD dwFlags,
     _Out_ XINPUT_CAPABILITIES* pCapabilities
@@ -210,8 +206,7 @@ DWORD WINAPI XInputGetCapabilities(
     return ERROR_SUCCESS;
 }
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetKeystroke(
+XI_API_FUNC DWORD WINAPI XInputGetKeystroke(
     _In_ DWORD dwUserIndex,
     _Reserved_ DWORD dwReserved,
     _Out_ XINPUT_KEYSTROKE* pKeystroke
@@ -231,8 +226,7 @@ DWORD WINAPI XInputGetKeystroke(
     return ERROR_EMPTY;
 }
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetState(
+XI_API_FUNC DWORD WINAPI XInputGetState(
     _In_ DWORD dwUserIndex,
     _Out_ XINPUT_STATE* pState
 ) WIN_NOEXCEPT {
@@ -253,8 +247,7 @@ DWORD WINAPI XInputGetState(
     return ERROR_SUCCESS;
 }
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputSetState(
+XI_API_FUNC DWORD WINAPI XInputSetState(
     _In_ DWORD dwUserIndex,
     _In_ XINPUT_VIBRATION* pVibration
 ) WIN_NOEXCEPT {

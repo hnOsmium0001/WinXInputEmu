@@ -4,8 +4,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-#include "export.h"
-
 #define XINPUT_DEVTYPE_GAMEPAD          0x01
 
 #define XINPUT_DEVSUBTYPE_GAMEPAD           0x01
@@ -163,9 +161,11 @@ struct XINPUT_KEYSTROKE
 // Note that XInput has a variety of different versions: https://learn.microsoft.com/en-us/windows/win32/xinput/xinput-versions and the relevant functions differ. 
 // We are targetting xinput1_4.dll as you would see on a typical Win10 installation
 
+#define XI_API_FUNC extern "C" __declspec(dllexport)
+
 // Deprecated in Win10
 //
-//WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
+//XI_API_FUNC
 //void WINAPI XInputEnable(
 //    _In_ BOOL enable
 //) WIN_NOEXCEPT;
@@ -173,8 +173,7 @@ struct XINPUT_KEYSTROKE
 //using Pfn_XInputEnable = std::add_pointer_t<decltype(XInputEnable)>;
 //extern Pfn_XInputEnable pfn_XInputEnable;
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetAudioDeviceIds(
+XI_API_FUNC DWORD WINAPI XInputGetAudioDeviceIds(
     _In_ DWORD dwUserIndex,
     _Out_writes_opt_(*pRenderCount) LPWSTR pRenderDeviceId,
     _Inout_opt_ UINT* pRenderCount,
@@ -188,8 +187,7 @@ extern Pfn_XInputGetAudioDeviceIds pfn_XInputGetAudioDeviceIds;
 // Deprecated since Win8
 // NOTE(hnOsmium0001): the definition is gone alltogether from Win10, on my dev machine
 //
-//WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-//DWORD WINAPI XInputGetDSoundAudioDeviceGuids(
+//XI_API_FUNC DWORD WINAPI XInputGetDSoundAudioDeviceGuids(
 //    DWORD dwUserIndex,
 //    GUID* pDSoundRenderGuid,
 //    GUID* pDSoundCaptureGuid
@@ -198,8 +196,7 @@ extern Pfn_XInputGetAudioDeviceIds pfn_XInputGetAudioDeviceIds;
 //using Pfn_XInputGetDSoundAudioDeviceGuids = std::add_pointer_t<decltype(XInputGetDSoundAudioDeviceGuids)>;
 //extern Pfn_XInputGetDSoundAudioDeviceGuids pfn_XInputGetDSoundAudioDeviceGuids;
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetBatteryInformation(
+XI_API_FUNC DWORD WINAPI XInputGetBatteryInformation(
     _In_ DWORD dwUserIndex,
     _In_ BYTE devType,
     _Out_ XINPUT_BATTERY_INFORMATION* pBatteryInformation
@@ -208,8 +205,7 @@ DWORD WINAPI XInputGetBatteryInformation(
 using Pfn_XInputGetBatteryInformation = std::add_pointer_t<decltype(XInputGetBatteryInformation)>;
 extern Pfn_XInputGetBatteryInformation pfn_XInputGetBatteryInformation;
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetCapabilities(
+XI_API_FUNC DWORD WINAPI XInputGetCapabilities(
     _In_ DWORD dwUserIndex,
     _In_ DWORD dwFlags,
     _Out_ XINPUT_CAPABILITIES* pCapabilities
@@ -218,8 +214,7 @@ DWORD WINAPI XInputGetCapabilities(
 using Pfn_XInputGetCapabilities = std::add_pointer_t<decltype(XInputGetCapabilities)>;
 extern Pfn_XInputGetCapabilities pfn_XInputGetCapabilities;
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetKeystroke(
+XI_API_FUNC DWORD WINAPI XInputGetKeystroke(
     _In_ DWORD dwUserIndex,
     _Reserved_ DWORD dwReserved,
     _Out_ XINPUT_KEYSTROKE* pKeystroke
@@ -228,8 +223,7 @@ DWORD WINAPI XInputGetKeystroke(
 using Pfn_XInputGetKeystroke = std::add_pointer_t<decltype(XInputGetKeystroke)>;
 extern Pfn_XInputGetKeystroke pfn_XInputGetKeystroke;
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputGetState(
+XI_API_FUNC DWORD WINAPI XInputGetState(
     _In_ DWORD dwUserIndex,
     _Out_ XINPUT_STATE* pState
 ) WIN_NOEXCEPT;
@@ -237,8 +231,7 @@ DWORD WINAPI XInputGetState(
 using Pfn_XInputGetState = std::add_pointer_t<decltype(XInputGetState)>;
 extern Pfn_XInputGetState pfn_XInputGetState;
 
-WinXInputEmu_EXTERN_C WinXInputEmu_EXPORT
-DWORD WINAPI XInputSetState(
+XI_API_FUNC DWORD WINAPI XInputSetState(
     _In_ DWORD dwUserIndex,
     _In_ XINPUT_VIBRATION* pVibration
 ) WIN_NOEXCEPT;
