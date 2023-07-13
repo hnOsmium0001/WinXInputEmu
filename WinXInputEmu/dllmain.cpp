@@ -183,9 +183,16 @@ DWORD WINAPI XInputGetCapabilities(
     pCapabilities->Type = XINPUT_DEVTYPE_GAMEPAD;
     pCapabilities->SubType = XINPUT_DEVSUBTYPE_GAMEPAD;
     pCapabilities->Flags = 0;
-    // TODO is this right? because this would be a functionality overlap with XInputGetState()
-    //      not mentioned in the docs: logically, XInputGetCapabilities() would will all buttons and joystick values as 1 if they exist at all, not corresponding to the current input state
-    pCapabilities->Gamepad = gXiGamepads[dwUserIndex].ComputeXInputGamepad();
+    pCapabilities->Gamepad = {
+        // We have all buttons
+        .wButtons = 0xFFFF,
+        .bLeftTrigger = 0xFF,
+        .bRightTrigger = 0xFF,
+        .sThumbLX = 0x7FFF,
+        .sThumbLY = 0x7FFF,
+        .sThumbRX = 0x7FFF,
+        .sThumbRY = 0x7FFF,
+    };
     pCapabilities->Vibration = {};
 
     return ERROR_SUCCESS;
