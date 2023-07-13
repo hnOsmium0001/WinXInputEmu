@@ -73,8 +73,8 @@ void InitKeyCodeConv() {
     /*add(VK_PRINT, {"PRINT key"sv);}*/
     /*add(VK_EXECUTE, {"EXECUTE key"sv);}*/
     /*add(VK_SNAPSHOT, {"PRINT SCREEN key"sv);}*/
-    add(VK_INSERT, { "INS key"sv });
-    add(VK_DELETE, { "DEL key"sv });
+    add(VK_INSERT, { "Insert"sv });
+    add(VK_DELETE, { "Delete"sv });
     /*add(VK_HELP, {"HELP key"sv);}*/
     add('0', { "0"sv });
     add('1', { "1"sv });

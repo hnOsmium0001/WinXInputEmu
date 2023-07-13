@@ -119,6 +119,7 @@ DWORD WINAPI XInputGetAudioDeviceIds(
 
     SrwSharedLock lock(gXiGamepadsLock);
 
+    //LOG_DEBUG(L"audio device ids {}", dwUserIndex);
     if (!gXiGamepadsEnabled[dwUserIndex])
         return pfn_XInputGetAudioDeviceIds(dwUserIndex, pRenderDeviceId, pRenderCount, pCaptureDeviceId, pCaptureCount);
 
@@ -142,6 +143,7 @@ DWORD WINAPI XInputGetBatteryInformation(
 
     SrwSharedLock lock(gXiGamepadsLock);
 
+    //LOG_DEBUG(L"battery info {}", dwUserIndex);
     if (!gXiGamepadsEnabled[dwUserIndex])
         return pfn_XInputGetBatteryInformation(dwUserIndex, devType, pBatteryInformation);
 
@@ -172,6 +174,7 @@ DWORD WINAPI XInputGetCapabilities(
 
     SrwSharedLock lock(gXiGamepadsLock);
 
+    //LOG_DEBUG(L"caps {}", dwUserIndex);
     if (!gXiGamepadsEnabled[dwUserIndex])
         return pfn_XInputGetCapabilities(dwUserIndex, dwFlags, pCapabilities);
 
@@ -198,6 +201,7 @@ DWORD WINAPI XInputGetKeystroke(
 
     SrwSharedLock lock(gXiGamepadsLock);
 
+    //LOG_DEBUG(L"keystroke {}", dwUserIndex);
     if (!gXiGamepadsEnabled[dwUserIndex])
         return pfn_XInputGetKeystroke(dwUserIndex, dwReserved, pKeystroke);
 
@@ -217,6 +221,7 @@ DWORD WINAPI XInputGetState(
 
     SrwSharedLock lock(gXiGamepadsLock);
 
+    //LOG_DEBUG(L"get state {}", dwUserIndex);
     if (!gXiGamepadsEnabled[dwUserIndex])
         return pfn_XInputGetState(dwUserIndex, pState);
 
@@ -238,6 +243,7 @@ DWORD WINAPI XInputSetState(
 
     SrwSharedLock lock(gXiGamepadsLock);
 
+    //LOG_DEBUG(L"set state {}", dwUserIndex);
     if (!gXiGamepadsEnabled[dwUserIndex])
         return pfn_XInputSetState(dwUserIndex, pVibration);
 

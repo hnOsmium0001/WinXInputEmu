@@ -69,8 +69,9 @@ struct IsrcSw_State {
 };
 
 static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
-    LOG_DEBUG(L"{} {}", pressed ? L"pressed" : L"released", vkey);
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        if (!gXiGamepadsEnabled[userIndex]) continue;
+
         auto& dev = gXiGamepads[userIndex];
         auto& extra = its.xiGamepadExtraInfo[userIndex];
 
@@ -79,7 +80,7 @@ static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its,
 
         switch (its.btns[userIndex][vkey]) {
             using enum XiButton;
-        case A: LOG_DEBUG(L"HERE");  dev.a = pressed; break;
+        case A: dev.a = pressed; break;
         case B: dev.b = pressed; break;
         case X: dev.x = pressed; break;
         case Y: dev.y = pressed; break;
@@ -120,14 +121,16 @@ static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its,
         if (recompute_lstick) {
             // Stick's actual value per user's speed setting
             int val = (int)(kStickMaxVal * dev.profile->lstick.kbd.speed);
-            dev.lstickX = (extra.lstick.left ? val : 0) + (extra.lstick.right ? -val : 0);
+            dev.lstickX = (extra.lstick.right ? val : 0) + (extra.lstick.left ? -val : 0);
             dev.lstickY = (extra.lstick.up ? val : 0) + (extra.lstick.down ? -val : 0);
         }
         if (recompute_rstick) {
             int val = (int)(kStickMaxVal * dev.profile->rstick.kbd.speed);
-            dev.rstickX = (extra.rstick.left ? val : 0) + (extra.rstick.right ? -val : 0);
+            dev.rstickX = (extra.rstick.right ? val : 0) + (extra.rstick.left ? -val : 0);
             dev.rstickY = (extra.rstick.up ? val : 0) + (extra.rstick.down ? -val : 0);
         }
+
+        ++dev.epoch;
     }
 }
 
@@ -270,13 +273,14 @@ void InputSource_RunSeparateWindow(HINSTANCE hinst, Config config) {
     RAWINPUTDEVICE rid[2];
 
     // We don't use RIDEV_NOLEGACY because all the window manipulation (e.g. dragging the title bar) relies on the "legacy messages"
+    // RIDEV_INPUTSINK so that we get input even if the game window is current in focus instead
     rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-    rid[0].dwFlags = RIDEV_DEVNOTIFY;
+    rid[0].dwFlags = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
     rid[0].usUsage = HID_USAGE_GENERIC_KEYBOARD;
     rid[0].hwndTarget = hwnd;
 
     rid[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
-    rid[1].dwFlags = RIDEV_DEVNOTIFY;
+    rid[1].dwFlags = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
     rid[1].usUsage = HID_USAGE_GENERIC_MOUSE;
     rid[1].hwndTarget = hwnd;
 
