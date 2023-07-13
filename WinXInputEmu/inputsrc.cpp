@@ -47,6 +47,7 @@ struct InputTranslationStruct {
     XiButton btns[XUSER_MAX_COUNT][0xFF];
 
     void Clear();
+    void PopulateBtnLut(int userIndex, const UserProfile& profile);
     void PopulateFromConfig(const Config& config);
 };
 
@@ -58,6 +59,34 @@ void InputTranslationStruct::Clear() {
     }
 }
 
+void InputTranslationStruct::PopulateBtnLut(int userIndex, const UserProfile& profile) {
+    using enum XiButton;
+#define BTN(KEY_ENUM, THE_BTN) if (THE_BTN.keyCode != 0xFF) btns[userIndex][THE_BTN.keyCode] = KEY_ENUM;
+    BTN(A, profile.a);
+    BTN(B, profile.b);
+    BTN(X, profile.x);
+    BTN(Y, profile.y);
+    BTN(LB, profile.lb);
+    BTN(RB, profile.rb);
+    BTN(LT, profile.lt);
+    BTN(RT, profile.rt);
+    BTN(Start, profile.start);
+    BTN(Back, profile.back);
+    BTN(DpadUp, profile.dpadUp);
+    BTN(DpadDown, profile.dpadDown);
+    BTN(DpadLeft, profile.dpadLeft);
+    BTN(DpadRight, profile.dpadRight);
+    BTN(LStickBtn, profile.lstickBtn);
+    BTN(RStickBtn, profile.rstickBtn);
+#define STICK(PREFIX, THE_STICK) \
+    if (THE_STICK.useMouse) {} \
+    else { BTN(PREFIX##StickUp, THE_STICK.kbd.up); BTN(PREFIX##StickDown, THE_STICK.kbd.down); BTN(PREFIX##StickLeft, THE_STICK.kbd.left); BTN(PREFIX##StickRight, THE_STICK.kbd.right); }
+    STICK(L, profile.lstick);
+    STICK(R, profile.rstick);
+#undef STICK
+#undef BTN
+}
+
 void InputTranslationStruct::PopulateFromConfig(const Config& config) {
     Clear();
 
@@ -65,32 +94,7 @@ void InputTranslationStruct::PopulateFromConfig(const Config& config) {
         const auto& profileName = config.xiGamepadBindings[userIndex];
         if (profileName.empty()) continue;
         const auto& profile = *config.profiles.at(profileName);
-
-        using enum XiButton;
-#define BTN(KEY_ENUM, THE_BTN) if (THE_BTN.keyCode != 0xFF) btns[userIndex][THE_BTN.keyCode] = KEY_ENUM;
-        BTN(A, profile.a);
-        BTN(B, profile.b);
-        BTN(X, profile.x);
-        BTN(Y, profile.y);
-        BTN(LB, profile.lb);
-        BTN(RB, profile.rb);
-        BTN(LT, profile.lt);
-        BTN(RT, profile.rt);
-        BTN(Start, profile.start);
-        BTN(Back, profile.back);
-        BTN(DpadUp, profile.dpadUp);
-        BTN(DpadDown, profile.dpadDown);
-        BTN(DpadLeft, profile.dpadLeft);
-        BTN(DpadRight, profile.dpadRight);
-        BTN(LStickBtn, profile.lstickBtn);
-        BTN(RStickBtn, profile.rstickBtn);
-#define STICK(PREFIX, THE_STICK) \
-    if (THE_STICK.useMouse) {} \
-    else { BTN(PREFIX##StickUp, THE_STICK.kbd.up); BTN(PREFIX##StickDown, THE_STICK.kbd.down); BTN(PREFIX##StickLeft, THE_STICK.kbd.left); BTN(PREFIX##StickRight, THE_STICK.kbd.right); }
-        STICK(L, profile.lstick);
-        STICK(R, profile.rstick);
-#undef STICK
-#undef BTN
+        PopulateBtnLut(userIndex, profile);
     }
 }
 
@@ -379,10 +383,15 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
 void RunInputSource(HINSTANCE hinst, Config config) {
     LOG_DEBUG(L"Starting input source window");
 
-    InputSrc_State state{
+    InputSrc_State s{
         .config = std::move(config),
     };
-    state.its.PopulateFromConfig(state.config);
+    s.config.onGamepadBindingChanged = [&](int userIndex, const std::string& profileName, const UserProfile& profile) { s.its.PopulateBtnLut(userIndex, profile); };
+    s.its.PopulateFromConfig(s.config);
+
+    UIState us{
+        .config = &s.config,
+    };
 
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);
@@ -395,7 +404,7 @@ void RunInputSource(HINSTANCE hinst, Config config) {
         return;
     }
 
-    state.mainWindow = CreateWindowExW(
+    s.mainWindow = CreateWindowExW(
         0,
         MAKEINTATOM(atom),
         L"WinXInputEmu Config",
@@ -411,20 +420,20 @@ void RunInputSource(HINSTANCE hinst, Config config) {
         hinst, // Instance handle
         NULL   // Additional application data
     );
-    if (state.mainWindow == nullptr) {
+    if (s.mainWindow == nullptr) {
         LOG_DEBUG(L"Error creating Input Source window: {}", GetLastErrorStr());
         return;
     }
 
-    if (!CreateDeviceD3D(state, state.mainWindow)) {
-        CleanupDeviceD3D(state);
+    if (!CreateDeviceD3D(s, s.mainWindow)) {
+        CleanupDeviceD3D(s);
         LOG_DEBUG(L"Error creating D3D context");
         return;
     }
 
-    SetWindowLongPtrW(state.mainWindow, GWLP_USERDATA, (LONG_PTR)&state);
-    ShowWindow(state.mainWindow, SW_SHOWDEFAULT);
-    UpdateWindow(state.mainWindow);
+    SetWindowLongPtrW(s.mainWindow, GWLP_USERDATA, (LONG_PTR)&s);
+    ShowWindow(s.mainWindow, SW_SHOWDEFAULT);
+    UpdateWindow(s.mainWindow);
 
     RAWINPUTDEVICE rid[2];
 
@@ -433,12 +442,12 @@ void RunInputSource(HINSTANCE hinst, Config config) {
     rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
     rid[0].dwFlags = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
     rid[0].usUsage = HID_USAGE_GENERIC_KEYBOARD;
-    rid[0].hwndTarget = state.mainWindow;
+    rid[0].hwndTarget = s.mainWindow;
 
     rid[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
     rid[1].dwFlags = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
     rid[1].usUsage = HID_USAGE_GENERIC_MOUSE;
-    rid[1].hwndTarget = state.mainWindow;
+    rid[1].hwndTarget = s.mainWindow;
 
     if (RegisterRawInputDevices(rid, std::size(rid), sizeof(RAWINPUTDEVICE)) == false) {
         return;
@@ -450,8 +459,8 @@ void RunInputSource(HINSTANCE hinst, Config config) {
     auto& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    ImGui_ImplWin32_Init(state.mainWindow);
-    ImGui_ImplDX11_Init(state.d3dDevice, state.d3dDeviceContext);
+    ImGui_ImplWin32_Init(s.mainWindow);
+    ImGui_ImplDX11_Init(s.d3dDevice, s.d3dDeviceContext);
 
     LOG_DEBUG(L"Starting working thread's main loop");
     bool done = false;
@@ -471,25 +480,25 @@ void RunInputSource(HINSTANCE hinst, Config config) {
         ImGui::NewFrame();
 
         ImGui::DockSpaceOverViewport();
-        ShowUI();
+        ShowUI(us);
 
         ImGui::Render();
         constexpr ImVec4 kClearColor{ 0.45f, 0.55f, 0.60f, 1.00f };
         constexpr float kClearColorPremultAlpha[]{ kClearColor.x * kClearColor.w, kClearColor.y * kClearColor.w, kClearColor.z * kClearColor.w, kClearColor.w };
-        state.d3dDeviceContext->OMSetRenderTargets(1, &state.mainRenderTargetView, nullptr);
-        state.d3dDeviceContext->ClearRenderTargetView(state.mainRenderTargetView, kClearColorPremultAlpha);
+        s.d3dDeviceContext->OMSetRenderTargets(1, &s.mainRenderTargetView, nullptr);
+        s.d3dDeviceContext->ClearRenderTargetView(s.mainRenderTargetView, kClearColorPremultAlpha);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-        state.swapChain->Present(1, 0); // Present with vsync
+        s.swapChain->Present(1, 0); // Present with vsync
     }
 
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    CleanupDeviceD3D(state);
+    CleanupDeviceD3D(s);
     // Do we actually need this?
-    //DestroyWindow(state.mainWindow);
+    //DestroyWindow(s.mainWindow);
     UnregisterClassW(MAKEINTATOM(atom), hinst);
 
     LOG_DEBUG(L"Stopping working thread");

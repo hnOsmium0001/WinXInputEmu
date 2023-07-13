@@ -1,10 +1,11 @@
 #pragma once
 
 #include <array>
+#include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <map>
 
 #include <toml++/toml.h>
 
@@ -58,6 +59,9 @@ struct UserProfile {
 struct Config {
     std::map<std::string, std::unique_ptr<UserProfile>, std::less<>> profiles;
     std::array<std::string, XUSER_MAX_COUNT> xiGamepadBindings;
+
+    // Transient fields
+    std::function<void(int userIndex, const std::string& profileName, const UserProfile& profile)> onGamepadBindingChanged;
 };
 
 toml::table StringifyConfig(const Config&) noexcept;

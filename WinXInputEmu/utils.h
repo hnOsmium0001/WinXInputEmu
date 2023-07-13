@@ -62,3 +62,5 @@ struct ScopeGuard {
 
 #define SCOPE_GUARD(name) ScopeGuard name = [&]()
 #define DEFER ScopeGuard UNIQUE_NAME(scopeGuard) = [&]()
+
+#define CALL_IF_NOT_NULL(func, ...) if (func) func(__VA_ARGS__)

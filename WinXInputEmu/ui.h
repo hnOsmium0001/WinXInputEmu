@@ -1,5 +1,11 @@
 #pragma once
 
-#include <imgui.h>
+#include "config.h"
 
-void ShowUI();
+struct UIState {
+    std::unique_ptr<void, void(*)(void*)> p{ nullptr, nullptr };
+
+    /* [In] */ Config* config;
+};
+
+void ShowUI(UIState& s);
