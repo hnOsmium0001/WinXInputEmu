@@ -4,7 +4,11 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <d3d11.h>
 #include <format>
+#include <imgui.h>
+#include <imgui_impl_dx11.h>
+#include <imgui_impl_win32.h>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -12,6 +16,39 @@
 #include <hidusage.h>
 
 #include "inputdevice.h"
+#include "ui.h"
+
+enum class XiButton : unsigned char {
+    None = 0,
+    A, B, X, Y,
+    LB, RB,
+    LT, RT,
+    Start, Back,
+    DpadUp, DpadDown, DpadLeft, DpadRight,
+    LStickBtn, RStickBtn,
+    LStickUp, LStickDown, LStickLeft, LStickRight,
+    RStickUp, RStickDown, RStickLeft, RStickRight,
+};
+
+// Information and lookup tables computable from a Config object
+// used for translating input key presses/mouse movements into gamepad state
+struct InputTranslationStruct {
+    struct {
+        struct {
+            // Keyboard mode stuff
+            bool up, down, left, right;
+
+            // Mouse mode stuff
+        } lstick, rstick;
+    } xiGamepadExtraInfo[XUSER_MAX_COUNT];
+
+    // VK_xxx is BYTE, max 255 values
+    // NOTE: XiButton::COUNT is used to indicate "this mapping is not bound"
+    XiButton btns[XUSER_MAX_COUNT][0xFF];
+
+    void Clear();
+    void PopulateFromConfig(const Config& config);
+};
 
 void InputTranslationStruct::Clear() {
     for (int i = 0; i < 0xFF; ++i) {
@@ -57,16 +94,29 @@ void InputTranslationStruct::PopulateFromConfig(const Config& config) {
     }
 }
 
-struct IsrcSw_State {
+struct InputSrc_State {
     std::vector<IdevDevice> devices;
 
     Config config = {};
     InputTranslationStruct its = {};
 
+    // https://github.com/ocornut/imgui/blob/master/examples/example_win32_directx11/main.cpp
+    // For ImGui main viewport
+    ID3D11Device* d3dDevice = nullptr;
+    ID3D11DeviceContext* d3dDeviceContext = nullptr;
+    IDXGISwapChain* swapChain = nullptr;
+    ID3D11RenderTargetView* mainRenderTargetView = nullptr;
+
+    HWND mainWindow = NULL;
+
     // For a RAWINPUT*
     std::unique_ptr<std::byte[]> rawinput;
     size_t rawinputSize = 0;
 };
+
+static void HandleMouseMovement(LONG dx, LONG dy, InputTranslationStruct& its, const Config& config) {
+
+}
 
 static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
@@ -134,18 +184,89 @@ static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its,
     }
 }
 
-LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) noexcept {
-    auto& s = *(IsrcSw_State*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+static void CleanupRenderTarget(InputSrc_State& s) {
+    if (s.mainRenderTargetView) {
+        s.mainRenderTargetView->Release();
+        s.mainRenderTargetView = nullptr;
+    }
+}
+
+static void CleanupDeviceD3D(InputSrc_State& s) {
+    CleanupRenderTarget(s);
+    if (s.swapChain) { s.swapChain->Release(); s.swapChain = nullptr; }
+    if (s.d3dDeviceContext) { s.d3dDeviceContext->Release(); s.d3dDeviceContext = nullptr; }
+    if (s.d3dDevice) { s.d3dDevice->Release(); s.d3dDevice = nullptr; }
+}
+
+static void CreateRenderTarget(InputSrc_State& s) {
+    ID3D11Texture2D* backBuffer;
+    s.swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
+    s.d3dDevice->CreateRenderTargetView(backBuffer, nullptr, &s.mainRenderTargetView);
+    backBuffer->Release();
+}
+
+static bool CreateDeviceD3D(InputSrc_State& s, HWND hWnd) {
+    // Setup swap chain
+    DXGI_SWAP_CHAIN_DESC sd;
+    ZeroMemory(&sd, sizeof(sd));
+    sd.BufferCount = 2;
+    sd.BufferDesc.Width = 0;
+    sd.BufferDesc.Height = 0;
+    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.RefreshRate.Numerator = 60;
+    sd.BufferDesc.RefreshRate.Denominator = 1;
+    sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.OutputWindow = hWnd;
+    sd.SampleDesc.Count = 1;
+    sd.SampleDesc.Quality = 0;
+    sd.Windowed = TRUE;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+
+    UINT createDeviceFlags = 0;
+    //createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    D3D_FEATURE_LEVEL featureLevel;
+    D3D_FEATURE_LEVEL featureLevelArray[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
+    HRESULT res = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &s.swapChain, &s.d3dDevice, &featureLevel, &s.d3dDeviceContext);
+    // Try high-performance WARP software driver if hardware is not available.
+    if (res == DXGI_ERROR_UNSUPPORTED)
+        res = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &s.swapChain, &s.d3dDevice, &featureLevel, &s.d3dDeviceContext);
+    if (res != S_OK)
+        return false;
+
+    CreateRenderTarget(s);
+    return true;
+}
+
+// Forward declare message handler from imgui_impl_win32.cpp
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) noexcept {
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, uMsg, wParam, lParam))
+        return true;
+
+    auto& s = *(InputSrc_State*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 
     switch (uMsg) {
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-
-        FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
-
-        EndPaint(hwnd, &ps);
+    case WM_SIZE: {
+        if (wParam == SIZE_MINIMIZED)
+            return 0;
+        auto resizeWidth = (UINT)LOWORD(lParam);
+        auto resizeHeight = (UINT)HIWORD(lParam);
+        CleanupRenderTarget(s);
+        s.swapChain->ResizeBuffers(0, resizeWidth, resizeHeight, DXGI_FORMAT_UNKNOWN, 0);
+        CreateRenderTarget(s);
         return 0;
+    }
+
+    case WM_CLOSE: {
+        if (hwnd == s.mainWindow) {
+            ShowWindow(hwnd, SW_HIDE);
+            return 0;
+        }
+        else {
+            break;
+        }
     }
 
     case WM_INPUT: {
@@ -170,7 +291,24 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         switch (ri->header.dwType) {
         case RIM_TYPEMOUSE: {
             const auto& mouse = ri->data.mouse;
-            // TODO
+
+            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) HandleKeyPress(VK_LBUTTON, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) HandleKeyPress(VK_LBUTTON, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) HandleKeyPress(VK_RBUTTON, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) HandleKeyPress(VK_RBUTTON, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) HandleKeyPress(VK_MBUTTON, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) HandleKeyPress(VK_MBUTTON, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN) HandleKeyPress(VK_XBUTTON1, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP) HandleKeyPress(VK_XBUTTON1, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN) HandleKeyPress(VK_XBUTTON2, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP) HandleKeyPress(VK_XBUTTON2, false, s.its, s.config);
+
+            if (mouse.usFlags & MOUSE_MOVE_ABSOLUTE) {
+                LOG_DEBUG("Warning: RAWINPUT reported absolute mouse corrdinates, not supported");
+                break;
+            } // else: MOUSE_MOVE_RELATIVE
+
+            HandleMouseMovement(mouse.lLastX, mouse.lLastY, s.its, s.config);
         } break;
 
         case RIM_TYPEKEYBOARD: {
@@ -179,10 +317,19 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             // This message is a part of a longer makecode sequence -- the actual Vkey is in another one
             if (kbd.VKey == 0xFF)
                 break;
+            // All of the relevant keys that we support fit in a BYTE
+            if (kbd.VKey > 0xFF)
+                break;
 
             bool press = !(kbd.Flags & RI_KEY_BREAK);
 
-            assert(kbd.VKey <= 0xFF);
+            // TODO move this to config
+            if (kbd.VKey == VK_F1) {
+                ShowWindow(s.mainWindow, SW_SHOWNORMAL);
+                SetFocus(s.mainWindow);
+                break;
+            }
+
             HandleKeyPress((BYTE)kbd.VKey, press, s.its, s.config);
         } break;
         }
@@ -229,12 +376,17 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
-void InputSource_RunSeparateWindow(HINSTANCE hinst, Config config) {
+void RunInputSource(HINSTANCE hinst, Config config) {
     LOG_DEBUG(L"Starting input source window");
+
+    InputSrc_State state{
+        .config = std::move(config),
+    };
+    state.its.PopulateFromConfig(state.config);
 
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = IsrcSw_WindowProc;
+    wc.lpfnWndProc = InputSrc_WndProc;
     wc.hInstance = hinst;
     wc.lpszClassName = L"WinXInputEmu";
     ATOM atom = RegisterClassExW(&wc);
@@ -243,32 +395,36 @@ void InputSource_RunSeparateWindow(HINSTANCE hinst, Config config) {
         return;
     }
 
-    HWND hwnd = CreateWindowExW(
+    state.mainWindow = CreateWindowExW(
         0,
         MAKEINTATOM(atom),
-        L"WinXInputEmu Input Source",
+        L"WinXInputEmu Config",
         WS_OVERLAPPEDWINDOW,
 
-        // Size and position
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+        // Position
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        // Size
+        1024, 640,
 
         NULL,  // Parent window    
         NULL,  // Menu
         hinst, // Instance handle
         NULL   // Additional application data
     );
-    if (hwnd == nullptr) {
+    if (state.mainWindow == nullptr) {
         LOG_DEBUG(L"Error creating Input Source window: {}", GetLastErrorStr());
         return;
     }
 
-    IsrcSw_State wndState{
-        .config = std::move(config),
-    };
-    wndState.its.PopulateFromConfig(wndState.config);
-    SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)&wndState);
+    if (!CreateDeviceD3D(state, state.mainWindow)) {
+        CleanupDeviceD3D(state);
+        LOG_DEBUG(L"Error creating D3D context");
+        return;
+    }
 
-    ShowWindow(hwnd, SW_SHOW);
+    SetWindowLongPtrW(state.mainWindow, GWLP_USERDATA, (LONG_PTR)&state);
+    ShowWindow(state.mainWindow, SW_SHOWDEFAULT);
+    UpdateWindow(state.mainWindow);
 
     RAWINPUTDEVICE rid[2];
 
@@ -277,22 +433,64 @@ void InputSource_RunSeparateWindow(HINSTANCE hinst, Config config) {
     rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
     rid[0].dwFlags = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
     rid[0].usUsage = HID_USAGE_GENERIC_KEYBOARD;
-    rid[0].hwndTarget = hwnd;
+    rid[0].hwndTarget = state.mainWindow;
 
     rid[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
     rid[1].dwFlags = RIDEV_DEVNOTIFY | RIDEV_INPUTSINK;
     rid[1].usUsage = HID_USAGE_GENERIC_MOUSE;
-    rid[1].hwndTarget = hwnd;
+    rid[1].hwndTarget = state.mainWindow;
 
     if (RegisterRawInputDevices(rid, std::size(rid), sizeof(RAWINPUTDEVICE)) == false) {
         return;
     }
 
-    LOG_DEBUG(L"Starting working thread's message pump");
+    // NB: we still can't run multiple copies of this thread, because ImGui context is global
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    auto& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+    ImGui_ImplWin32_Init(state.mainWindow);
+    ImGui_ImplDX11_Init(state.d3dDevice, state.d3dDeviceContext);
+
+    LOG_DEBUG(L"Starting working thread's main loop");
+    bool done = false;
+    while (!done) {
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+            if (msg.message == WM_QUIT)
+                done = true;
+        }
+        if (done)
+            break;
+
+        ImGui_ImplDX11_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::DockSpaceOverViewport();
+        ShowUI();
+
+        ImGui::Render();
+        constexpr ImVec4 kClearColor{ 0.45f, 0.55f, 0.60f, 1.00f };
+        constexpr float kClearColorPremultAlpha[]{ kClearColor.x * kClearColor.w, kClearColor.y * kClearColor.w, kClearColor.z * kClearColor.w, kClearColor.w };
+        state.d3dDeviceContext->OMSetRenderTargets(1, &state.mainRenderTargetView, nullptr);
+        state.d3dDeviceContext->ClearRenderTargetView(state.mainRenderTargetView, kClearColorPremultAlpha);
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+        state.swapChain->Present(1, 0); // Present with vsync
     }
+
+    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+
+    CleanupDeviceD3D(state);
+    // Do we actually need this?
+    //DestroyWindow(state.mainWindow);
+    UnregisterClassW(MAKEINTATOM(atom), hinst);
+
+    LOG_DEBUG(L"Stopping working thread");
 }

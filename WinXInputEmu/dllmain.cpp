@@ -81,7 +81,7 @@ static DWORD WINAPI WorkingThreadFunction(LPVOID lpParam) {
     BindAllConfigGamepadBindings(config);
 
     // TODO replace this with a config UI window
-    InputSource_RunSeparateWindow(gHInstance, std::move(config));
+    RunInputSource(gHInstance, std::move(config));
 
     return 0;
 }

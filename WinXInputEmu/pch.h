@@ -33,11 +33,16 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+#include <d3d11.h>
 #include <Rpc.h>
 #include <hidusage.h>
 
 ////////// 3rd party headers //////////
 
+#include <imgui.h>
+#include <imgui_impl_dx11.h>
+#include <imgui_impl_win32.h>
+#include <imgui_stdlib.h>
 #include <toml++/toml.h>
 
 // We don't include Xinput.h because dllmain.cpp wants separate declarations -- adding __declspec(dllexport), which is incompatible from the ones in Xinput.h
