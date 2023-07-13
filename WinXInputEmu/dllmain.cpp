@@ -104,7 +104,7 @@ static BOOL CALLBACK DllInitHandler(PINIT_ONCE initOnce, PVOID parameter, PVOID*
     return TRUE;
 }
 static void EnsureDllInit() {
-    PVOID ctx;
+    PVOID ctx = nullptr;
     BOOL status = InitOnceExecuteOnce(&gDllInitGuard, DllInitHandler, nullptr, &ctx);
     if (!status) {
         LOG_DEBUG(L"Failed to execute INIT_ONCE");
