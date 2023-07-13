@@ -4,6 +4,7 @@
 #include "userdevice.h"
 
 enum class XiButton : unsigned char {
+    None = 0,
     A, B, X, Y,
     LB, RB,
     LT, RT,
@@ -12,7 +13,6 @@ enum class XiButton : unsigned char {
     LStickBtn, RStickBtn,
     LStickUp, LStickDown, LStickLeft, LStickRight,
     RStickUp, RStickDown, RStickLeft, RStickRight,
-    None,
 };
 
 // Information and lookup tables computable from a Config object

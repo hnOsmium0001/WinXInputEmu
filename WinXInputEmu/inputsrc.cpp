@@ -16,7 +16,7 @@
 void InputTranslationStruct::Clear() {
     for (int i = 0; i < 0xFF; ++i) {
         for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
-            btns[i][userIndex] = XiButton::None;
+            btns[userIndex][i] = XiButton::None;
         }
     }
 }
@@ -25,7 +25,35 @@ void InputTranslationStruct::PopulateFromConfig(const Config& config) {
     Clear();
 
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        const auto& profileName = config.xiGamepadBindings[userIndex];
+        if (profileName.empty()) continue;
+        const auto& profile = *config.profiles.at(profileName);
 
+        using enum XiButton;
+#define BTN(KEY_ENUM, THE_BTN) if (THE_BTN.keyCode != 0xFF) btns[userIndex][THE_BTN.keyCode] = KEY_ENUM;
+        BTN(A, profile.a);
+        BTN(B, profile.b);
+        BTN(X, profile.x);
+        BTN(Y, profile.y);
+        BTN(LB, profile.lb);
+        BTN(RB, profile.rb);
+        BTN(LT, profile.lt);
+        BTN(RT, profile.rt);
+        BTN(Start, profile.start);
+        BTN(Back, profile.back);
+        BTN(DpadUp, profile.dpadUp);
+        BTN(DpadDown, profile.dpadDown);
+        BTN(DpadLeft, profile.dpadLeft);
+        BTN(DpadRight, profile.dpadRight);
+        BTN(LStickBtn, profile.lstickBtn);
+        BTN(RStickBtn, profile.rstickBtn);
+#define STICK(PREFIX, THE_STICK) \
+    if (THE_STICK.useMouse) {} \
+    else { BTN(PREFIX##StickUp, THE_STICK.kbd.up); BTN(PREFIX##StickDown, THE_STICK.kbd.down); BTN(PREFIX##StickLeft, THE_STICK.kbd.left); BTN(PREFIX##StickRight, THE_STICK.kbd.right); }
+        STICK(L, profile.lstick);
+        STICK(R, profile.rstick);
+#undef STICK
+#undef BTN
     }
 }
 
@@ -41,6 +69,7 @@ struct IsrcSw_State {
 };
 
 static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
+    LOG_DEBUG(L"{} {}", pressed ? L"pressed" : L"released", vkey);
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
         auto& dev = gXiGamepads[userIndex];
         auto& extra = its.xiGamepadExtraInfo[userIndex];
@@ -50,7 +79,7 @@ static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its,
 
         switch (its.btns[userIndex][vkey]) {
             using enum XiButton;
-        case A: dev.a = pressed; break;
+        case A: LOG_DEBUG(L"HERE");  dev.a = pressed; break;
         case B: dev.b = pressed; break;
         case X: dev.x = pressed; break;
         case Y: dev.y = pressed; break;
@@ -198,6 +227,8 @@ LRESULT CALLBACK IsrcSw_WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 }
 
 void InputSource_RunSeparateWindow(HINSTANCE hinst, Config config) {
+    LOG_DEBUG(L"Starting input source window");
+
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = IsrcSw_WindowProc;
@@ -231,6 +262,7 @@ void InputSource_RunSeparateWindow(HINSTANCE hinst, Config config) {
     IsrcSw_State wndState{
         .config = std::move(config),
     };
+    wndState.its.PopulateFromConfig(wndState.config);
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)&wndState);
 
     ShowWindow(hwnd, SW_SHOW);

@@ -50,9 +50,9 @@ static toml::table ParseDesignatedConfigFile() {
     // Load config from the designated config file
     WCHAR buf[MAX_PATH];
     DWORD numChars = GetModuleFileNameW(gHInstance, buf, MAX_PATH);
-    auto dllPath = std::filesystem::path(buf, buf + numChars).remove_filename() / L"WinXInputEmu.toml";
+    auto configPath = std::filesystem::path(buf, buf + numChars).remove_filename() / L"WinXInputEmu.toml";
 
-    LOG_DEBUG(L"Config path: {}", dllPath.native());
+    LOG_DEBUG(L"Config path: {}", configPath.native());
 
     // Copied from toml++, except always uses stream to parse
     std::ifstream file;
@@ -60,9 +60,9 @@ static toml::table ParseDesignatedConfigFile() {
     file.rdbuf()->pubsetbuf(fileBuffer, sizeof(fileBuffer));
     // This should use the -W version of CreateFile, etc. because open() takes an overload that handles fs::path directly
     // Unlike toml++, which doesn't take fs::path, so we have to pass in std::wstring, which then gets converted to UTF-8 nicely but then relies on the codepage for the -A versions
-    file.open(dllPath, std::ifstream::in | std::ifstream::binary | std::ifstream::ate);
+    file.open(configPath, std::ios::in | std::ios::binary);
     if (!file.is_open()) {
-        LOG_DEBUG("Config {} could not be opened for reading", dllPath.native());
+        LOG_DEBUG("Config {} could not be opened for reading", configPath.native());
         MessageBoxW(nullptr, L"Config file could not be loaded, WinXInputEmu will use an empty one.\nThis will stop all behaviors and forward all API calls to the system DLL.", L"WinXInputEmu", MB_OK | MB_ICONERROR);
         return {};
     }
@@ -203,6 +203,7 @@ DWORD WINAPI XInputGetKeystroke(
 
     // TODO this would require us to maintain a list of input events
     //      I don't think many games actually use this?
+    *pKeystroke = {};
 
     return ERROR_EMPTY;
 }
@@ -218,6 +219,8 @@ DWORD WINAPI XInputGetState(
 
     if (!gXiGamepadsEnabled[dwUserIndex])
         return pfn_XInputGetState(dwUserIndex, pState);
+
+    *pState = {};
 
     const auto& dev = gXiGamepads[dwUserIndex];
     pState->dwPacketNumber = dev.epoch;
@@ -240,6 +243,8 @@ DWORD WINAPI XInputSetState(
 
     // Ignore all vibration states, as we don't really have a way to make keyboards and mouse vibrate :P
     // NOTE: the application shouldn't be calling this function anyways, because we specified in XINPUT_CAPABILITIES.Flags that we don't support vibration
+    *pVibration = {};
+
     return ERROR_SUCCESS;
 }
 
