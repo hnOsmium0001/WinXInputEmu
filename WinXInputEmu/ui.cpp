@@ -5,13 +5,13 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#define FORMAT_GAMEPAD_NAME(VAR, USER_INDEX ) char VAR[256]; snprintf(VAR, sizeof(VAR), "Gamepad %d", (int)USER_INDEX);
+
 struct UIStatePrivate {
-    decltype(Config::xiGamepadBindings) xiGamepadBindingEditBuffer;
+    int selectedUserIndex = -1;
     bool showDemoWindow = false;
-    int currentGamepad = -1;
 
     UIStatePrivate(UIState& s)
-        : xiGamepadBindingEditBuffer(s.config->xiGamepadBindings)
     {
     }
 };
@@ -38,21 +38,33 @@ void ShowUI(UIState& s) {
         ImGui::EndMainMenuBar();
     }
 
-    ImGui::Begin("Gamepad bindings");
+    ImGui::Begin("Gamepads");
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
-        auto& profile = p.xiGamepadBindingEditBuffer[userIndex];
-        char id[] = "Gamepad 0";
-        //             0 ----> 8
-        id[8] = '0' + userIndex;
-
-        if (ImGui::InputText(id, &profile, ImGuiInputTextFlags_EnterReturnsTrue)) {
-            LOG_DEBUG(L"UI: rebound gamepad {} to profile '{}'", userIndex, Utf8ToWide(profile));
-            BindProfileToGamepad(*s.config, userIndex, profile);
+        FORMAT_GAMEPAD_NAME(id, userIndex);
+        bool selected = p.selectedUserIndex == userIndex;
+        if (ImGui::Selectable(id, &selected)) {
+            p.selectedUserIndex = userIndex;
         }
     }
     ImGui::End();
 
-    ImGui::Begin("Gamepad");
+    ImGui::Begin("Gamepad info");
+    if (p.selectedUserIndex != -1) {
+        auto& profileName = s.config->xiGamepadBindings[p.selectedUserIndex];
+        if (ImGui::InputText("Profile name", &profileName)) {
+            auto iter = s.config->profiles.find(profileName);
+            if (iter != s.config->profiles.end()) {
+                auto& profile = *iter->second;
+
+                LOG_DEBUG(L"UI: rebound gamepad {} to profile '{}'", p.selectedUserIndex, Utf8ToWide(profileName));
+                BindProfileToGamepad(p.selectedUserIndex, profile);
+                CALL_IF_NOT_NULL(s.config->onGamepadBindingChanged, p.selectedUserIndex, profileName, profile);
+            }
+        }
+    }
+    else {
+        ImGui::Text("Select a gamepad to show details");
+    }
     ImGui::End();
 
     if (p.showDemoWindow) {

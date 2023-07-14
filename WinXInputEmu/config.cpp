@@ -85,21 +85,11 @@ Config LoadConfig(const toml::table& toml) noexcept {
     return config;
 }
 
-void BindProfileToGamepad(Config& config, int userIndex, std::string_view profileName) {
-    if (userIndex < 0 || userIndex >= XUSER_MAX_COUNT)
-        return;
-    if (profileName.empty())
-        return;
-
-    auto iter = config.profiles.find(profileName);
-    if (iter != config.profiles.end()) {
-        SrwExclusiveLock lock(gXiGamepadsLock);
-        config.xiGamepadBindings[userIndex] = std::string(profileName);
-        gXiGamepadsEnabled[userIndex] = true;
-        gXiGamepads[userIndex] = {};
-        gXiGamepads[userIndex].profile = iter->second.get();
-        CALL_IF_NOT_NULL(config.onGamepadBindingChanged, userIndex, config.xiGamepadBindings[userIndex], *iter->second);
-    }
+void BindProfileToGamepad(int userIndex, const UserProfile& profile) {
+    SrwExclusiveLock lock(gXiGamepadsLock);
+    gXiGamepadsEnabled[userIndex] = true;
+    gXiGamepads[userIndex] = {};
+    gXiGamepads[userIndex].profile = &profile;
 }
 
 void BindAllConfigGamepadBindings(const Config& config) {

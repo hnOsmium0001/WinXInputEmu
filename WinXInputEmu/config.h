@@ -67,5 +67,7 @@ struct Config {
 toml::table StringifyConfig(const Config&) noexcept;
 Config LoadConfig(const toml::table&) noexcept;
 
-void BindProfileToGamepad(Config& config, int userIndex, std::string_view profileName);
+// Lock: built-in
+void BindProfileToGamepad(int userIndex, const UserProfile& profile);
+// Lock: built-in
 void BindAllConfigGamepadBindings(const Config& config);
