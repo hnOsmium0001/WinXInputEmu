@@ -3,11 +3,50 @@
 #include "config.h"
 
 #include <algorithm>
-#include <format>
+#include <fstream>
 
+#include "dll.h"
 #include "userdevice.h"
 
 using namespace std::literals;
+
+Config gConfig;
+ConfigEvents gConfigEvents;
+
+void ReloadConfigFromDesignatedPath() {
+    // Load config from the designated config file
+    WCHAR buf[MAX_PATH];
+    DWORD numChars = GetModuleFileNameW(gHModule, buf, MAX_PATH);
+    auto configPath = std::filesystem::path(buf, buf + numChars).remove_filename() / L"WinXInputEmu.toml";
+
+    LOG_DEBUG(L"Designated config path: {}", configPath.native());
+
+    ReloadConfig(configPath);
+}
+
+void ReloadConfig(const std::filesystem::path& path) {
+    gConfig = LoadConfig(toml::parse_file(path));
+
+    SrwExclusiveLock lock(gXiGamepadsLock);
+
+    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        const auto& profileName = gConfig.xiGamepadBindings[userIndex];
+        if (profileName.empty()) continue;
+
+        auto iter = gConfig.profiles.find(profileName);
+        if (iter != gConfig.profiles.end()) {
+            const auto& profile = *iter->second;
+            LOG_DEBUG(L"Binding profile '{}' to gamepad {}", Utf8ToWide(profileName), userIndex);
+            gXiGamepadsEnabled[userIndex] = true;
+            gXiGamepads[userIndex] = {};
+            gXiGamepads[userIndex].profile = &profile;
+            gConfigEvents.onGamepadBindingChanged(userIndex, profileName, profile);
+        }
+        else {
+            LOG_DEBUG(L"Cannout find profile '{}' for binding gamepads, skipping", Utf8ToWide(profileName));
+        }
+    }
+}
 
 toml::table StringifyConfig(const Config& config)  noexcept {
     return {}; // TODO
@@ -92,24 +131,4 @@ void BindProfileToGamepad(int userIndex, const UserProfile& profile) {
     gXiGamepadsEnabled[userIndex] = true;
     gXiGamepads[userIndex] = {};
     gXiGamepads[userIndex].profile = &profile;
-}
-
-void BindAllConfigGamepadBindings(const Config& config) {
-    SrwExclusiveLock lock(gXiGamepadsLock);
-    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
-        const auto& profileName = config.xiGamepadBindings[userIndex];
-        if (profileName.empty()) continue;
-
-        auto iter = config.profiles.find(profileName);
-        if (iter != config.profiles.end()) {
-            const auto& profile = iter->second;
-            LOG_DEBUG(L"Binding profile '{}' to gamepad {}", Utf8ToWide(profileName), userIndex);
-            gXiGamepadsEnabled[userIndex] = true;
-            gXiGamepads[userIndex] = {};
-            gXiGamepads[userIndex].profile = profile.get();
-        }
-        else {
-            LOG_DEBUG(L"Cannout find profile '{}' for binding gamepads, skipping", Utf8ToWide(profileName));
-        }
-    }
 }

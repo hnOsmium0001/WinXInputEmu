@@ -5,8 +5,6 @@
 struct UIState {
     std::unique_ptr<void, void(*)(void*)> p{ nullptr, nullptr };
 
-    /* [In] */ Config* config;
-
     // If set to a valid gamepad user index, the next key recieved by the input source will be used to set its keyboard filter
     /* [Out] */ int bindIdevFromNextKey = -1;
     // If set to a valid gamepad user index, the next mouse click recieved by the input source will be used to set its mouse filter

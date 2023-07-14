@@ -37,3 +37,18 @@ std::wstring GetLastErrorStr() noexcept {
     LocalFree(messageBuffer);
     return errMsg;
 }
+
+toml::table toml::parse_file(const std::filesystem::path& path) {
+    // Modified from toml::parse_file()
+
+    std::ifstream file;
+    char fileBuffer[sizeof(void*) * 1024];
+    file.rdbuf()->pubsetbuf(fileBuffer, sizeof(fileBuffer));
+    // This should use the -W version of CreateFile, etc. because open() takes an overload that handles fs::path directly
+    // Unlike toml++, which doesn't take fs::path, so we have to pass in std::wstring, which then gets converted to UTF-8 nicely but then relies on the codepage for the -A versions
+    file.open(path, std::ios::in | std::ios::binary);
+    if (!file.is_open()) 
+        throw toml::parse_error("File could not be opened for reading", source_position{}, std::make_shared<const std::string>(path.string()));
+
+    return toml::parse(file);
+}

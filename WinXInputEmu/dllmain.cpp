@@ -1,14 +1,12 @@
 #include "pch.h"
 
-#include <filesystem>
 #include <format>
-#include <fstream>
-#include <iostream>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+#include "dll.h"
 #include "export.h"
 #include "inputdevice.h"
 #include "inputsrc.h"
@@ -16,8 +14,9 @@
 #include "userdevice.h"
 #include "utils.h"
 
+// Declared in dll.h
 // Assigned in DllMain() -> DLL_PROCESS_ATTACH
-static HMODULE gHInstance;
+HMODULE gHModule;
 
 // Definitions for stuff in shadowed.h
 static HMODULE xinput_dll;
@@ -50,39 +49,10 @@ static void InitializeShadowedPfns() {
     pfn_XInputSetState = (Pfn_XInputSetState)GetProcAddress(xinput_dll, "XInputSetState");
 }
 
-static toml::table ParseDesignatedConfigFile() {
-    // Load config from the designated config file
-    WCHAR buf[MAX_PATH];
-    DWORD numChars = GetModuleFileNameW(gHInstance, buf, MAX_PATH);
-    auto configPath = std::filesystem::path(buf, buf + numChars).remove_filename() / L"WinXInputEmu.toml";
-
-    LOG_DEBUG(L"Config path: {}", configPath.native());
-
-    // Copied from toml++, except always uses stream to parse
-    std::ifstream file;
-    char fileBuffer[sizeof(void*) * 1024];
-    file.rdbuf()->pubsetbuf(fileBuffer, sizeof(fileBuffer));
-    // This should use the -W version of CreateFile, etc. because open() takes an overload that handles fs::path directly
-    // Unlike toml++, which doesn't take fs::path, so we have to pass in std::wstring, which then gets converted to UTF-8 nicely but then relies on the codepage for the -A versions
-    file.open(configPath, std::ios::in | std::ios::binary);
-    if (!file.is_open()) {
-        LOG_DEBUG("Config {} could not be opened for reading", configPath.native());
-        MessageBoxW(nullptr, L"Config file could not be loaded, WinXInputEmu will use an empty one.\nThis will stop all behaviors and forward all API calls to the system DLL.", L"WinXInputEmu", MB_OK | MB_ICONERROR);
-        return {};
-    }
-
-    return toml::parse(file);
-}
-
 static HANDLE gWorkingThread;
 static DWORD gWorkingThreadId;
 static DWORD WINAPI WorkingThreadFunction(LPVOID lpParam) {
-    auto config = LoadConfig(ParseDesignatedConfigFile());
-    BindAllConfigGamepadBindings(config);
-
-    // TODO replace this with a config UI window
-    RunInputSource(gHInstance, std::move(config));
-
+    RunInputSource();
     return 0;
 }
 
@@ -270,7 +240,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) noexc
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
         // In win32 (that is, not 16-bit windows) HINSTANCE and HMODULE are the same thing
-        gHInstance = hModule;
+        gHModule = hModule;
 
         InitKeyCodeConv();
 

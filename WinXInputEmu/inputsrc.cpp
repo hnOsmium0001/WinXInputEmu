@@ -15,6 +15,7 @@
 
 #include <hidusage.h>
 
+#include "dll.h"
 #include "inputdevice.h"
 #include "ui.h"
 
@@ -48,7 +49,6 @@ struct InputTranslationStruct {
 
     void Clear();
     void PopulateBtnLut(int userIndex, const UserProfile& profile);
-    void PopulateFromConfig(const Config& config);
 };
 
 void InputTranslationStruct::Clear() {
@@ -87,23 +87,11 @@ void InputTranslationStruct::PopulateBtnLut(int userIndex, const UserProfile& pr
 #undef BTN
 }
 
-void InputTranslationStruct::PopulateFromConfig(const Config& config) {
-    Clear();
-
-    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
-        const auto& profileName = config.xiGamepadBindings[userIndex];
-        if (profileName.empty()) continue;
-        const auto& profile = *config.profiles.at(profileName);
-        PopulateBtnLut(userIndex, profile);
-    }
-}
-
-struct InputSrc_State {
+struct ThreadState {
     UIState* uiState = nullptr;
 
     std::vector<IdevDevice> devices;
 
-    Config config = {};
     InputTranslationStruct its = {};
 
     // https://github.com/ocornut/imgui/blob/master/examples/example_win32_directx11/main.cpp
@@ -120,11 +108,11 @@ struct InputSrc_State {
     size_t rawinputSize = 0;
 };
 
-static void HandleMouseMovement(HANDLE hDevice, LONG dx, LONG dy, InputTranslationStruct& its, const Config& config) {
+static void HandleMouseMovement(HANDLE hDevice, LONG dx, LONG dy, InputTranslationStruct& its) {
 
 }
 
-static void HandleKeyPress(HANDLE hDevice, BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
+static void HandleKeyPress(HANDLE hDevice, BYTE vkey, bool pressed, InputTranslationStruct& its) {
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
         if (!gXiGamepadsEnabled[userIndex]) continue;
         if (IsKeyCodeMouseButton(vkey)) {
@@ -198,28 +186,28 @@ static void HandleKeyPress(HANDLE hDevice, BYTE vkey, bool pressed, InputTransla
     }
 }
 
-static void CleanupRenderTarget(InputSrc_State& s) {
+static void CleanupRenderTarget(ThreadState& s) {
     if (s.mainRenderTargetView) {
         s.mainRenderTargetView->Release();
         s.mainRenderTargetView = nullptr;
     }
 }
 
-static void CleanupDeviceD3D(InputSrc_State& s) {
+static void CleanupDeviceD3D(ThreadState& s) {
     CleanupRenderTarget(s);
     if (s.swapChain) { s.swapChain->Release(); s.swapChain = nullptr; }
     if (s.d3dDeviceContext) { s.d3dDeviceContext->Release(); s.d3dDeviceContext = nullptr; }
     if (s.d3dDevice) { s.d3dDevice->Release(); s.d3dDevice = nullptr; }
 }
 
-static void CreateRenderTarget(InputSrc_State& s) {
+static void CreateRenderTarget(ThreadState& s) {
     ID3D11Texture2D* backBuffer;
     s.swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
     s.d3dDevice->CreateRenderTargetView(backBuffer, nullptr, &s.mainRenderTargetView);
     backBuffer->Release();
 }
 
-static bool CreateDeviceD3D(InputSrc_State& s, HWND hWnd) {
+static bool CreateDeviceD3D(ThreadState& s, HWND hWnd) {
     // Setup swap chain
     DXGI_SWAP_CHAIN_DESC sd;
     ZeroMemory(&sd, sizeof(sd));
@@ -255,11 +243,11 @@ static bool CreateDeviceD3D(InputSrc_State& s, HWND hWnd) {
 // Forward declare message handler from imgui_impl_win32.cpp
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) noexcept {
+static LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) noexcept {
     if (ImGui_ImplWin32_WndProcHandler(hwnd, uMsg, wParam, lParam))
         return true;
 
-    auto& s = *(InputSrc_State*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    auto& s = *(ThreadState*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 
     switch (uMsg) {
     case WM_SIZE: {
@@ -315,23 +303,23 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                 }
             }
 
-            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_LBUTTON, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_LBUTTON, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_RBUTTON, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_RBUTTON, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_MBUTTON, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_MBUTTON, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN) HandleKeyPress(ri->header.hDevice, VK_XBUTTON1, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP) HandleKeyPress(ri->header.hDevice, VK_XBUTTON1, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN) HandleKeyPress(ri->header.hDevice, VK_XBUTTON2, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP) HandleKeyPress(ri->header.hDevice, VK_XBUTTON2, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_LBUTTON, true, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_LBUTTON, false, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_RBUTTON, true, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_RBUTTON, false, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_MBUTTON, true, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_MBUTTON, false, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN) HandleKeyPress(ri->header.hDevice, VK_XBUTTON1, true, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP) HandleKeyPress(ri->header.hDevice, VK_XBUTTON1, false, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN) HandleKeyPress(ri->header.hDevice, VK_XBUTTON2, true, s.its);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP) HandleKeyPress(ri->header.hDevice, VK_XBUTTON2, false, s.its);
 
             if (mouse.usFlags & MOUSE_MOVE_ABSOLUTE) {
                 LOG_DEBUG("Warning: RAWINPUT reported absolute mouse corrdinates, not supported");
                 break;
             } // else: MOUSE_MOVE_RELATIVE
 
-            HandleMouseMovement(ri->header.hDevice, mouse.lLastX, mouse.lLastY, s.its, s.config);
+            HandleMouseMovement(ri->header.hDevice, mouse.lLastX, mouse.lLastY, s.its);
         } break;
 
         case RIM_TYPEKEYBOARD: {
@@ -346,7 +334,7 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
 
             bool press = !(kbd.Flags & RI_KEY_BREAK);
 
-            if (kbd.VKey == s.config.hotkeyShowUI) {
+            if (kbd.VKey == gConfig.hotkeyShowUI) {
                 ShowWindow(s.mainWindow, SW_SHOWNORMAL);
                 SetFocus(s.mainWindow);
                 break;
@@ -361,7 +349,7 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                 }
             }
 
-            HandleKeyPress(ri->header.hDevice, (BYTE)kbd.VKey, press, s.its, s.config);
+            HandleKeyPress(ri->header.hDevice, (BYTE)kbd.VKey, press, s.its);
         } break;
         }
 
@@ -407,24 +395,22 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
-void RunInputSource(HINSTANCE hinst, Config config) {
+void RunInputSource() {
     LOG_DEBUG(L"Starting input source window");
 
-    InputSrc_State s{
-        .config = std::move(config),
-    };
-    s.config.onGamepadBindingChanged = [&](int userIndex, const std::string& profileName, const UserProfile& profile) { s.its.PopulateBtnLut(userIndex, profile); };
-    s.its.PopulateFromConfig(s.config);
-
-    UIState us{
-        .config = &s.config,
-    };
+    ThreadState s;
+    UIState us;
     s.uiState = &us;
+
+    gConfigEvents.onGamepadBindingChanged += [&](int userIndex, const std::string& profileName, const UserProfile& profile) { s.its.PopulateBtnLut(userIndex, profile); };
+    ReloadConfigFromDesignatedPath();
+
+    //s.its.PopulateFromConfig(gConfig);
 
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = InputSrc_WndProc;
-    wc.hInstance = hinst;
+    wc.hInstance = gHModule;
     wc.lpszClassName = L"WinXInputEmu";
     ATOM atom = RegisterClassExW(&wc);
     if (!atom) {
@@ -445,7 +431,7 @@ void RunInputSource(HINSTANCE hinst, Config config) {
 
         NULL,  // Parent window    
         NULL,  // Menu
-        hinst, // Instance handle
+        gHModule, // Instance handle
         NULL   // Additional application data
     );
     if (s.mainWindow == nullptr) {
@@ -527,7 +513,7 @@ void RunInputSource(HINSTANCE hinst, Config config) {
     CleanupDeviceD3D(s);
     // Do we actually need this?
     //DestroyWindow(s.mainWindow);
-    UnregisterClassW(MAKEINTATOM(atom), hinst);
+    UnregisterClassW(MAKEINTATOM(atom), gHModule);
 
     LOG_DEBUG(L"Stopping working thread");
 }

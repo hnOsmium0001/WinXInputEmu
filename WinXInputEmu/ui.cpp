@@ -28,6 +28,10 @@ void ShowUI(UIState& s) {
 
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("WinXInputEmu")) {
+            if (ImGui::MenuItem("Reload config file")) {
+                ReloadConfigFromDesignatedPath();
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Quit")) {
                 PostQuitMessage(0);
             }
@@ -53,7 +57,7 @@ void ShowUI(UIState& s) {
     ImGui::Begin("Gamepad info");
     if (p.selectedUserIndex != -1) {
         auto userIndex = p.selectedUserIndex;
-        auto& profileName = s.config->xiGamepadBindings[userIndex];
+        auto& profileName = gConfig.xiGamepadBindings[userIndex];
 
         if (ImGui::Button("Rebind##kdb")) {
             s.bindIdevFromNextKey = userIndex;
@@ -90,13 +94,13 @@ void ShowUI(UIState& s) {
                 ImGui::Text("Bound mouse: %p", gXiGamepads[userIndex].srcMouse);
 
         if (ImGui::InputText("Profile name", &profileName)) {
-            auto iter = s.config->profiles.find(profileName);
-            if (iter != s.config->profiles.end()) {
+            auto iter = gConfig.profiles.find(profileName);
+            if (iter != gConfig.profiles.end()) {
                 auto& profile = *iter->second;
 
                 LOG_DEBUG(L"UI: rebound gamepad {} to profile '{}'", userIndex, Utf8ToWide(profileName));
                 BindProfileToGamepad(userIndex, profile);
-                CALL_IF_NOT_NULL(s.config->onGamepadBindingChanged, userIndex, profileName, profile);
+                gConfigEvents.onGamepadBindingChanged(userIndex, profileName, profile);
             }
         }
     }

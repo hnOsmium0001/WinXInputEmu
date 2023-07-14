@@ -60,15 +60,21 @@ struct Config {
     std::map<std::string, std::unique_ptr<UserProfile>, std::less<>> profiles;
     std::array<std::string, XUSER_MAX_COUNT> xiGamepadBindings;
     KeyCode hotkeyShowUI;
-
-    // Transient fields
-    std::function<void(int userIndex, const std::string& profileName, const UserProfile& profile)> onGamepadBindingChanged;
 };
+
+// Container for all EventBus objects used for a given Config object
+// Since Config is just a plain old object, these need to be called by code that modifies the given Config object.
+struct ConfigEvents {
+    EventBus<void(int userIndex, const std::string& profileName, const UserProfile& profile)> onGamepadBindingChanged;
+};
+
+extern Config gConfig;
+extern ConfigEvents gConfigEvents;
+void ReloadConfigFromDesignatedPath();
+void ReloadConfig(const std::filesystem::path& path);
 
 toml::table StringifyConfig(const Config&) noexcept;
 Config LoadConfig(const toml::table&) noexcept;
 
 // Lock: built-in
 void BindProfileToGamepad(int userIndex, const UserProfile& profile);
-// Lock: built-in
-void BindAllConfigGamepadBindings(const Config& config);
