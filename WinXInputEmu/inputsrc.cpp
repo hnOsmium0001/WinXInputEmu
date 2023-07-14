@@ -346,8 +346,7 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
 
             bool press = !(kbd.Flags & RI_KEY_BREAK);
 
-            // TODO move this to config
-            if (kbd.VKey == VK_F1) {
+            if (kbd.VKey == s.config.hotkeyShowUI) {
                 ShowWindow(s.mainWindow, SW_SHOWNORMAL);
                 SetFocus(s.mainWindow);
                 break;

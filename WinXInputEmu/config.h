@@ -59,6 +59,7 @@ struct UserProfile {
 struct Config {
     std::map<std::string, std::unique_ptr<UserProfile>, std::less<>> profiles;
     std::array<std::string, XUSER_MAX_COUNT> xiGamepadBindings;
+    KeyCode hotkeyShowUI;
 
     // Transient fields
     std::function<void(int userIndex, const std::string& profileName, const UserProfile& profile)> onGamepadBindingChanged;

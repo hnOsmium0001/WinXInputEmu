@@ -43,6 +43,8 @@ static void ReadJoystick(toml::node_view<const toml::node> t, UserProfile::Joyst
 Config LoadConfig(const toml::table& toml) noexcept {
     Config config;
 
+    config.hotkeyShowUI = KeyCodeFromString(toml["HotKeys"]["ShowUI"].value_or<std::string_view>(""sv)).value_or(0xFF);
+
     if (auto tomlProfiles = toml["UserProfiles"].as_array()) {
         for (auto& e : *tomlProfiles) {
             auto e1 = e.as_table();

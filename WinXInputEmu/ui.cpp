@@ -55,14 +55,15 @@ void ShowUI(UIState& s) {
         auto userIndex = p.selectedUserIndex;
         auto& profileName = s.config->xiGamepadBindings[userIndex];
 
-        if (ImGui::Button("Rebind keyboard")) {
+        if (ImGui::Button("Rebind##kdb")) {
             s.bindIdevFromNextKey = userIndex;
         }
         ImGui::SameLine();
-        if (ImGui::Button("Rebind mouse")) {
-            s.bindIdevFromNextMouse = userIndex;
+        if (ImGui::Button("Unbind##kdb")) {
+            SrwExclusiveLock lock(gXiGamepadsLock);
+            gXiGamepads[userIndex].srcKbd = INVALID_HANDLE_VALUE;
         }
-
+        ImGui::SameLine();
         if (s.bindIdevFromNextKey == userIndex)
             ImGui::Text("Bound keyboard: [press any key]");
         else
@@ -71,6 +72,15 @@ void ShowUI(UIState& s) {
             else
                 ImGui::Text("Bound keyboard: %p", gXiGamepads[userIndex].srcKbd);
 
+        if (ImGui::Button("Rebind##mouse")) {
+            s.bindIdevFromNextMouse = userIndex;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Unbind##mouse")) {
+            SrwExclusiveLock lock(gXiGamepadsLock);
+            gXiGamepads[userIndex].srcMouse = INVALID_HANDLE_VALUE;
+        }
+        ImGui::SameLine();
         if (s.bindIdevFromNextMouse == userIndex)
             ImGui::Text("Bound mouse: [press any mouse button]");
         else
