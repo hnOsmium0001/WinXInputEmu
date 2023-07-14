@@ -13,8 +13,10 @@
 struct XiGamepad {
     const UserProfile* profile = nullptr;
 
-    IdevDevice srcKbd;
-    IdevDevice srcMouse;
+    // If == INVALID_HANDLE_VALUE, accept any input source
+    // Otherwise accept only the specified input source
+    HANDLE srcKbd = INVALID_HANDLE_VALUE;
+    HANDLE srcMouse = INVALID_HANDLE_VALUE;
 
     // This shall be incremented every time any field is updated due to input state changes
     int epoch = 0;

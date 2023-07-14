@@ -99,6 +99,8 @@ void InputTranslationStruct::PopulateFromConfig(const Config& config) {
 }
 
 struct InputSrc_State {
+    UIState* uiState = nullptr;
+
     std::vector<IdevDevice> devices;
 
     Config config = {};
@@ -118,13 +120,21 @@ struct InputSrc_State {
     size_t rawinputSize = 0;
 };
 
-static void HandleMouseMovement(LONG dx, LONG dy, InputTranslationStruct& its, const Config& config) {
+static void HandleMouseMovement(HANDLE hDevice, LONG dx, LONG dy, InputTranslationStruct& its, const Config& config) {
 
 }
 
-static void HandleKeyPress(BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
+static void HandleKeyPress(HANDLE hDevice, BYTE vkey, bool pressed, InputTranslationStruct& its, const Config& config) {
     for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
         if (!gXiGamepadsEnabled[userIndex]) continue;
+        if (IsKeyCodeMouseButton(vkey)) {
+            HANDLE src = gXiGamepads[userIndex].srcMouse;
+            if (src != INVALID_HANDLE_VALUE && src != hDevice) continue;
+        }
+        else {
+            HANDLE src = gXiGamepads[userIndex].srcKbd;
+            if (src != INVALID_HANDLE_VALUE && src != hDevice) continue;
+        }
 
         auto& dev = gXiGamepads[userIndex];
         auto& extra = its.xiGamepadExtraInfo[userIndex];
@@ -296,23 +306,32 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
         case RIM_TYPEMOUSE: {
             const auto& mouse = ri->data.mouse;
 
-            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) HandleKeyPress(VK_LBUTTON, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) HandleKeyPress(VK_LBUTTON, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) HandleKeyPress(VK_RBUTTON, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) HandleKeyPress(VK_RBUTTON, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) HandleKeyPress(VK_MBUTTON, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) HandleKeyPress(VK_MBUTTON, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN) HandleKeyPress(VK_XBUTTON1, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP) HandleKeyPress(VK_XBUTTON1, false, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN) HandleKeyPress(VK_XBUTTON2, true, s.its, s.config);
-            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP) HandleKeyPress(VK_XBUTTON2, false, s.its, s.config);
+            // If any button is pressed...
+            if (mouse.usButtonFlags != 0) {
+                if (s.uiState->bindIdevFromNextMouse != -1) {
+                    gXiGamepads[s.uiState->bindIdevFromNextMouse].srcMouse = ri->header.hDevice;
+                    s.uiState->bindIdevFromNextMouse = -1;
+                    break;
+                }
+            }
+
+            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_LBUTTON, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_LBUTTON, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_RBUTTON, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_RBUTTON, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) HandleKeyPress(ri->header.hDevice, VK_MBUTTON, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) HandleKeyPress(ri->header.hDevice, VK_MBUTTON, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN) HandleKeyPress(ri->header.hDevice, VK_XBUTTON1, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP) HandleKeyPress(ri->header.hDevice, VK_XBUTTON1, false, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_DOWN) HandleKeyPress(ri->header.hDevice, VK_XBUTTON2, true, s.its, s.config);
+            if (mouse.usButtonFlags & RI_MOUSE_BUTTON_5_UP) HandleKeyPress(ri->header.hDevice, VK_XBUTTON2, false, s.its, s.config);
 
             if (mouse.usFlags & MOUSE_MOVE_ABSOLUTE) {
                 LOG_DEBUG("Warning: RAWINPUT reported absolute mouse corrdinates, not supported");
                 break;
             } // else: MOUSE_MOVE_RELATIVE
 
-            HandleMouseMovement(mouse.lLastX, mouse.lLastY, s.its, s.config);
+            HandleMouseMovement(ri->header.hDevice, mouse.lLastX, mouse.lLastY, s.its, s.config);
         } break;
 
         case RIM_TYPEKEYBOARD: {
@@ -334,7 +353,16 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                 break;
             }
 
-            HandleKeyPress((BYTE)kbd.VKey, press, s.its, s.config);
+            // If any key is pressed...
+            if (press) {
+                if (s.uiState->bindIdevFromNextKey != -1) {
+                    gXiGamepads[s.uiState->bindIdevFromNextKey].srcKbd = ri->header.hDevice;
+                    s.uiState->bindIdevFromNextKey = -1;
+                    break;
+                }
+            }
+
+            HandleKeyPress(ri->header.hDevice, (BYTE)kbd.VKey, press, s.its, s.config);
         } break;
         }
 
@@ -355,7 +383,7 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
             s.devices.push_back(IdevDevice::FromHANDLE(hDevice));
 
             const auto& idev = s.devices.back();
-            LOG_DEBUG("Connected {} {}", RawInputTypeToString(idev.info.dwType), idev.name);
+            LOG_DEBUG("Connected {} {}", RawInputTypeToString(idev.info.dwType), idev.nameWide);
         }
         else if (wParam == GIDC_REMOVAL) {
             // HACK: this relies on std::erase_if only visiting each element once (which is almost necessarily the case) but still technically not standard-compliant
@@ -364,7 +392,7 @@ LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
                 s.devices,
                 [&](const IdevDevice& idev) {
                     if (idev.hDevice == hDevice) {
-                        LOG_DEBUG("Disconnected {} {}", RawInputTypeToString(idev.info.dwType), idev.name);
+                        LOG_DEBUG("Disconnected {} {}", RawInputTypeToString(idev.info.dwType), idev.nameWide);
                         return true;
                     }
                     else {
@@ -392,6 +420,7 @@ void RunInputSource(HINSTANCE hinst, Config config) {
     UIState us{
         .config = &s.config,
     };
+    s.uiState = &us;
 
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);

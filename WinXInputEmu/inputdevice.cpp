@@ -243,6 +243,10 @@ std::optional<KeyCode> KeyCodeFromString(std::string_view str) {
         return {};
 }
 
+bool IsKeyCodeMouseButton(KeyCode key) {
+    return key == VK_LBUTTON || key == VK_RBUTTON || key == VK_MBUTTON || key == VK_XBUTTON1 || key == VK_XBUTTON2;
+}
+
 GUID ParseRawInputDeviceGUID(std::wstring_view name) {
     // RAWINPUT device name format:
     // \\?\HID#VID_xxxx&PID_xxxx&MI_xx#x&xxxxxxxx&x&xxxx#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}
@@ -301,11 +305,11 @@ IdevDevice IdevDevice::FromHANDLE(HANDLE hDevice) {
 
     UINT deviceNameLen = 0;
     GetRawInputDeviceInfoW(hDevice, RIDI_DEVICENAME, NULL, &deviceNameLen);
-    res.name.resize_and_overwrite(
+    res.nameWide.resize_and_overwrite(
         deviceNameLen,
         [&](wchar_t* buf, size_t) { GetRawInputDeviceInfoW(hDevice, RIDI_DEVICENAME, buf, &deviceNameLen); return deviceNameLen; });
 
-    res.guid = ParseRawInputDeviceGUID(res.name);
+    res.guid = ParseRawInputDeviceGUID(res.nameWide);
 
     return res;
 }
@@ -336,6 +340,6 @@ void PollInputDevices(std::vector<IdevDevice>& out) {
 
     for (UINT i = 0; i < numDevicesSuccessfullyFetched; i++) {
         out.push_back(IdevDevice::FromHANDLE(devices[i].hDevice));
-        LOG_DEBUG("[PollInputDevices()] {} {}", devices[i].dwType, out.back().name);
+        LOG_DEBUG("[PollInputDevices()] {} {}", devices[i].dwType, out.back().nameWide);
     }
 }
