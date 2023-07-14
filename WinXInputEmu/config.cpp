@@ -84,17 +84,12 @@ Config LoadConfig(const toml::table& toml) noexcept {
 
     config.hotkeyShowUI = KeyCodeFromString(toml["HotKeys"]["ShowUI"].value_or<std::string_view>(""sv)).value_or(0xFF);
 
-    if (auto tomlProfiles = toml["UserProfiles"].as_array()) {
-        for (auto& e : *tomlProfiles) {
-            auto e1 = e.as_table();
+    if (auto tomlProfiles = toml["UserProfiles"].as_table()) {
+        for (auto&& [key, val] : *tomlProfiles) {
+            auto e1 = val.as_table();
             if (!e1) continue;
             auto& tomlProfile = *e1;
-
-            auto name = tomlProfile["Name"].value<std::string>();
-            if (!name) {
-                LOG_DEBUG("UserProfile cannot have empty name");
-                continue;
-            }
+            auto name = key.str();
 
             auto profile = std::make_unique<UserProfile>();
             ReadButton(tomlProfile["A"], profile->a);
@@ -114,7 +109,7 @@ Config LoadConfig(const toml::table& toml) noexcept {
             ReadJoystick(tomlProfile["LStick"], profile->lstick, profile->rstickBtn);
             ReadJoystick(tomlProfile["RStick"], profile->rstick, profile->lstickBtn);
 
-            config.profiles.try_emplace(name.value(), std::move(profile));
+            config.profiles.try_emplace(std::string(name), std::move(profile));
         }
     }
 
