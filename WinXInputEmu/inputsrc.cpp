@@ -106,6 +106,8 @@ struct ThreadState {
     // For a RAWINPUT*
     std::unique_ptr<std::byte[]> rawinput;
     size_t rawinputSize = 0;
+
+    bool blockingMessagePump = false;
 };
 
 static void HandleMouseMovement(HANDLE hDevice, LONG dx, LONG dy, InputTranslationStruct& its) {
@@ -264,6 +266,9 @@ static LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
     case WM_CLOSE: {
         if (hwnd == s.mainWindow) {
             ShowWindow(hwnd, SW_HIDE);
+            // this will break if we are using multi-viewport
+            // TODO hide all other ImGui viewports
+            s.blockingMessagePump = true;
             return 0;
         }
         else {
@@ -337,6 +342,7 @@ static LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
             if (kbd.VKey == gConfig.hotkeyShowUI) {
                 ShowWindow(s.mainWindow, SW_SHOWNORMAL);
                 SetFocus(s.mainWindow);
+                s.blockingMessagePump = false;
                 break;
             }
 
@@ -472,22 +478,33 @@ void RunInputSource() {
     ImGui::CreateContext();
     auto& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.IniFilename = "WinXInputEmu.imgui-state";
 
     ImGui_ImplWin32_Init(s.mainWindow);
     ImGui_ImplDX11_Init(s.d3dDevice, s.d3dDeviceContext);
 
     LOG_DEBUG(L"Starting working thread's main loop");
-    bool done = false;
-    while (!done) {
+    while (true) {
         MSG msg;
-        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+
+        // The blocking message pump
+        // We'll block here, until one of the messages changes changes blockingMessagePump to false (i.e. we should be rendering again) ...
+        while (s.blockingMessagePump && GetMessageW(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
             if (msg.message == WM_QUIT)
-                done = true;
+                goto cleanup;
         }
-        if (done)
-            break;
+
+        // ... in which case the above loop breaks, and we come here (regular polling message pump) to process the rest, and then enter regular main loop doing rendering + polling
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+
+            // WM_QUIT is gaurenteed to only exist when there is nothing else in the message queue, we can safely exit immediately
+            if (msg.message == WM_QUIT)
+                goto cleanup;
+        }
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -506,6 +523,7 @@ void RunInputSource() {
         s.swapChain->Present(1, 0); // Present with vsync
     }
 
+cleanup:
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
