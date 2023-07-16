@@ -308,6 +308,7 @@ IdevDevice IdevDevice::FromHANDLE(HANDLE hDevice) {
     res.nameWide.resize_and_overwrite(
         deviceNameLen,
         [&](wchar_t* buf, size_t) { GetRawInputDeviceInfoW(hDevice, RIDI_DEVICENAME, buf, &deviceNameLen); return deviceNameLen; });
+    res.nameUtf8 = WideToUtf8(res.nameWide);
 
     res.guid = ParseRawInputDeviceGUID(res.nameWide);
 

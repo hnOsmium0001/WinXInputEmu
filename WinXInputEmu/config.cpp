@@ -26,6 +26,8 @@ void ReloadConfigFromDesignatedPath() {
 
 void ReloadConfig(const std::filesystem::path& path) {
     gConfig = LoadConfig(toml::parse_file(path));
+    
+    gConfigEvents.onMouseCheckFrequencyChanged(gConfig.mouseCheckFrequency);
 
     SrwExclusiveLock lock(gXiGamepadsLock);
 
@@ -71,7 +73,11 @@ static void ReadJoystick(toml::node_view<const toml::node> t, UserProfile::Joyst
     }
     else if (v == "mouse") {
         js.useMouse = true;
-        // TODO
+        js.mouse.sensitivity = t["Sensitivity"].value_or<float>(50.0f);
+        js.mouse.nonLinear = t["NonLinearSensitivity"].value_or<float>(0.8f);
+        js.mouse.deadzone = t["Deadzone"].value_or<float>(0.02f);
+        js.mouse.invertXAxis = t["InvertXAxis"].value_or<bool>(false);
+        js.mouse.invertYAxis = t["InvertYAxis"].value_or<bool>(false);
     }
     else {
         // Resets to inactive mode
@@ -82,6 +88,7 @@ static void ReadJoystick(toml::node_view<const toml::node> t, UserProfile::Joyst
 Config LoadConfig(const toml::table& toml) noexcept {
     Config config;
 
+    config.mouseCheckFrequency = toml["General"]["MouseCheckFrequency"].value_or<int>(75);
     config.hotkeyShowUI = KeyCodeFromString(toml["HotKeys"]["ShowUI"].value_or<std::string_view>(""sv)).value_or(0xFF);
 
     if (auto tomlProfiles = toml["UserProfiles"].as_table()) {

@@ -1,8 +1,9 @@
-#include "pch.h"
+﻿#include "pch.h"
 
 #include "inputsrc.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <d3d11.h>
 #include <format>
@@ -18,6 +19,8 @@
 #include "dll.h"
 #include "inputdevice.h"
 #include "ui.h"
+
+constexpr UINT_PTR kMouseCheckTimerID = 0;
 
 enum class XiButton : unsigned char {
     None = 0,
@@ -41,19 +44,27 @@ struct InputTranslationStruct {
 
             // Mouse mode stuff
         } lstick, rstick;
+
+        float accuMouseX;
+        float accuMouseY;
     } xiGamepadExtraInfo[XUSER_MAX_COUNT];
 
     // VK_xxx is BYTE, max 255 values
     // NOTE: XiButton::COUNT is used to indicate "this mapping is not bound"
     XiButton btns[XUSER_MAX_COUNT][0xFF];
 
-    void Clear();
+    InputTranslationStruct() {
+        ClearAll();
+    }
+
+    void ClearAll();
     void PopulateBtnLut(int userIndex, const UserProfile& profile);
 };
 
-void InputTranslationStruct::Clear() {
-    for (int i = 0; i < 0xFF; ++i) {
-        for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+void InputTranslationStruct::ClearAll() {
+    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        xiGamepadExtraInfo[userIndex] = {};
+        for (int i = 0; i < 0xFF; ++i) {
             btns[userIndex][i] = XiButton::None;
         }
     }
@@ -92,7 +103,7 @@ struct ThreadState {
 
     std::vector<IdevDevice> devices;
 
-    InputTranslationStruct its = {};
+    InputTranslationStruct its;
 
     // https://github.com/ocornut/imgui/blob/master/examples/example_win32_directx11/main.cpp
     // For ImGui main viewport
@@ -110,8 +121,109 @@ struct ThreadState {
     bool blockingMessagePump = false;
 };
 
-static void HandleMouseMovement(HANDLE hDevice, LONG dx, LONG dy, InputTranslationStruct& its) {
+static float Scale(float x, float lowerbound, float upperbound) {
+    return (x - lowerbound) / (upperbound - lowerbound);
+}
 
+/// \param phi phi ∈ [0,2π], defines in which direction the stick is tilted.
+/// \param tilt tilt ∈ (0,1], defines the amount of tilt. 0 is no tilt, 1 is full tilt.
+static void SetJoystickPosition(float phi, float tilt, bool invertX, bool invertY, short& outX, short& outY) {
+    constexpr float pi = 3.14159265358979323846f;
+    constexpr float kSnapToFullFilt = 0.005f;
+
+    tilt = std::clamp(tilt, 0.0f, 1.0f);
+    tilt = (1 - tilt) < kSnapToFullFilt ? 1 : tilt;
+
+    // [0,1]
+    float x, y;
+
+#define RANGE_FOR_X(LOWERBOUND, UPPERBOUND, FACTOR) if (phi >= LOWERBOUND && phi <= UPPERBOUND) { x = FACTOR * tilt * Scale(phi, LOWERBOUND, UPPERBOUND); y = FACTOR * tilt; }
+#define RANGE_FOR_Y(LOWERBOUND, UPPERBOUND, FACTOR) if (phi >= LOWERBOUND && phi <= UPPERBOUND) { x = FACTOR * tilt; y = FACTOR * tilt * Scale(phi, LOWERBOUND, UPPERBOUND); }
+    // Two cases with forward+right
+    // Tilt is forward and slightly right
+    RANGE_FOR_X(3 * pi / 2, 7 * pi / 4, 1);
+    // Tilt is slightly forwardand right.
+    RANGE_FOR_Y(7 * pi / 4, 2 * pi, 1);
+    // Two cases with right+downward
+    // Tilt is right and slightly downward.
+    RANGE_FOR_Y(0, pi / 4, 1);
+    // Tilt is downward and slightly right.
+    RANGE_FOR_X(pi / 4, pi / 2, 1);
+    // Two cases with downward+left
+    // Tilt is downward and slightly left.
+    RANGE_FOR_X(pi / 2, 3 * pi / 4, -1);
+    // Tilt is left and slightly downward.
+    RANGE_FOR_X(3 * pi / 4, pi, -1);
+    // Two cases with forward+left
+    // Tilt is left and slightly forward.
+    RANGE_FOR_Y(pi, 5 * pi / 4, -1);
+    // Tilt is forward and slightly left.
+    RANGE_FOR_X(5 * pi / 4, 3 * pi / 2, -1);
+#undef RANGE_FOR_X
+#undef RANGE_FOR_Y
+
+
+    // Scale [0,1] to [INT16_MIN,INT16_MAX]
+    outX = static_cast<short>(x * 32768);
+    outY = static_cast<short>(y * 32768);
+
+    if (invertX) outX = -outX;
+    if (invertY) outY = -outY;
+}
+
+static void DoMouse2Joystick(InputTranslationStruct& its) {
+    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        auto& profile = gXiGamepads[userIndex].profile;
+        auto& dev = gXiGamepads[userIndex];
+        auto& extra = its.xiGamepadExtraInfo[userIndex];
+
+        constexpr float kOuterRadius = 10.0f;
+        constexpr float kBounceBack = 0.0f;
+
+        float accuX = extra.accuMouseX;
+        float accuY = extra.accuMouseY;
+        // Distance of mouse from center
+        float r = sqrt(accuX * accuX + accuY * accuY);
+
+        // Clamp to a point on controller circle, if we are outside it
+        if (r > kOuterRadius) {
+            accuX = round(accuX * (kOuterRadius - kBounceBack) / r);
+            accuX = round(accuY * (kOuterRadius - kBounceBack) / r);
+            r = sqrt(accuX * accuX + accuY * accuY);
+        }
+
+        float phi = atan2(accuY, accuX);
+
+        auto forStick = [&](auto& conf, auto& ex, short& outX, short& outY) {
+            if (r > conf.sensitivity * kOuterRadius) {
+                float num = r - conf.sensitivity * kOuterRadius;
+                float denom = kOuterRadius - conf.sensitivity * kOuterRadius;
+                SetJoystickPosition(phi, pow(num / denom, conf.nonLinear));
+            }
+            else {
+                dev.lstickX = 0;
+                dev.lstickY = 0;
+            }
+        };
+        forStick(profile->lstick.mouse, extra.lstick, dev.lstickX, dev.lstickY);
+        forStick(profile->rstick.mouse, extra.rstick, dev.rstickX, dev.rstickY);
+
+        extra.accuMouseX = 0;
+        extra.accuMouseY = 0;
+    }
+}
+
+static void HandleMouseMovement(HANDLE hDevice, LONG dx, LONG dy, InputTranslationStruct& its) {
+    for (int userIndex = 0; userIndex < XUSER_MAX_COUNT; ++userIndex) {
+        if (!gXiGamepadsEnabled[userIndex]) continue;
+        HANDLE src = gXiGamepads[userIndex].srcMouse;
+        if (src != INVALID_HANDLE_VALUE && src != hDevice) continue;
+
+        auto& extra = its.xiGamepadExtraInfo[userIndex];
+
+        extra.accuMouseX += dx;
+        extra.accuMouseY += dy;
+    }
 }
 
 static void HandleKeyPress(HANDLE hDevice, BYTE vkey, bool pressed, InputTranslationStruct& its) {
@@ -252,6 +364,20 @@ static LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
     auto& s = *(ThreadState*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 
     switch (uMsg) {
+    case WM_TIMER: {
+        auto timerID = (UINT_PTR)wParam;
+
+        switch (timerID) {
+        case kMouseCheckTimerID: {
+            DoMouse2Joystick(s.its);
+            return 0;
+        }
+
+        default: break;
+        }
+        break;
+    }
+
     case WM_SIZE: {
         if (wParam == SIZE_MINIMIZED)
             return 0;
@@ -408,10 +534,13 @@ void RunInputSource() {
     UIState us;
     s.uiState = &us;
 
-    gConfigEvents.onGamepadBindingChanged += [&](int userIndex, const std::string& profileName, const UserProfile& profile) { s.its.PopulateBtnLut(userIndex, profile); };
+    gConfigEvents.onMouseCheckFrequencyChanged += [&](int newFrequency) {
+        SetTimer(nullptr, kMouseCheckTimerID, newFrequency, nullptr);
+    };
+    gConfigEvents.onGamepadBindingChanged += [&](int userIndex, const std::string& profileName, const UserProfile& profile) {
+        s.its.PopulateBtnLut(userIndex, profile);
+    };
     ReloadConfigFromDesignatedPath();
-
-    //s.its.PopulateFromConfig(gConfig);
 
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);

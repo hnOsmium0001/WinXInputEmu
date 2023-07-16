@@ -37,8 +37,6 @@ struct UserProfile {
             float nonLinear = 1.0f;
             // Range: [0,1]
             float deadzone = 0.0f;
-            // Recommends 50-10
-            int mouseCheckFrequency = 75;
             bool invertXAxis = false;
             bool invertYAxis = false;
         } mouse;
@@ -59,12 +57,15 @@ struct UserProfile {
 struct Config {
     std::map<std::string, std::unique_ptr<UserProfile>, std::less<>> profiles;
     std::array<std::string, XUSER_MAX_COUNT> xiGamepadBindings;
+    // Recommends 50-100
+    int mouseCheckFrequency = 75;
     KeyCode hotkeyShowUI;
 };
 
 // Container for all EventBus objects used for a given Config object
 // Since Config is just a plain old object, these need to be called by code that modifies the given Config object.
 struct ConfigEvents {
+    EventBus<void(int)> onMouseCheckFrequencyChanged;
     EventBus<void(int userIndex, const std::string& profileName, const UserProfile& profile)> onGamepadBindingChanged;
 };
 
