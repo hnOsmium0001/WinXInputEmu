@@ -96,7 +96,7 @@ void ShowUI(UIState& s) {
         if (ImGui::InputText("Profile name", &profileName)) {
             auto iter = gConfig.profiles.find(profileName);
             if (iter != gConfig.profiles.end()) {
-                auto& profile = *iter->second;
+                auto& profile = iter->second;
 
                 LOG_DEBUG(L"UI: rebound gamepad {} to profile '{}'", userIndex, Utf8ToWide(profileName));
                 BindProfileToGamepad(userIndex, profile);

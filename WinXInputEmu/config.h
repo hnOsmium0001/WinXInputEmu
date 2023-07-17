@@ -55,7 +55,7 @@ struct UserProfile {
 };
 
 struct Config {
-    std::map<std::string, std::unique_ptr<UserProfile>, std::less<>> profiles;
+    std::map<std::string, UserProfile, std::less<>> profiles;
     std::array<std::string, XUSER_MAX_COUNT> xiGamepadBindings;
     // Recommends 50-100
     int mouseCheckFrequency = 75;

@@ -37,7 +37,7 @@ void ReloadConfig(const std::filesystem::path& path) {
 
         auto iter = gConfig.profiles.find(profileName);
         if (iter != gConfig.profiles.end()) {
-            const auto& profile = *iter->second;
+            const auto& profile = iter->second;
             LOG_DEBUG(L"Binding profile '{}' to gamepad {}", Utf8ToWide(profileName), userIndex);
             gXiGamepadsEnabled[userIndex] = true;
             gXiGamepads[userIndex] = {};
@@ -98,23 +98,23 @@ Config LoadConfig(const toml::table& toml) noexcept {
             auto& tomlProfile = *e1;
             auto name = key.str();
 
-            auto profile = std::make_unique<UserProfile>();
-            ReadButton(tomlProfile["A"], profile->a);
-            ReadButton(tomlProfile["B"], profile->b);
-            ReadButton(tomlProfile["X"], profile->x);
-            ReadButton(tomlProfile["Y"], profile->y);
-            ReadButton(tomlProfile["LB"], profile->lb);
-            ReadButton(tomlProfile["RB"], profile->rb);
-            ReadButton(tomlProfile["LT"], profile->lt);
-            ReadButton(tomlProfile["RT"], profile->rt);
-            ReadButton(tomlProfile["Start"], profile->start);
-            ReadButton(tomlProfile["Back"], profile->back);
-            ReadButton(tomlProfile["DpadUp"], profile->dpadUp);
-            ReadButton(tomlProfile["DpadDown"], profile->dpadDown);
-            ReadButton(tomlProfile["DpadLeft"], profile->dpadLeft);
-            ReadButton(tomlProfile["DpadRight"], profile->dpadRight);
-            ReadJoystick(tomlProfile["LStick"], profile->lstick, profile->rstickBtn);
-            ReadJoystick(tomlProfile["RStick"], profile->rstick, profile->lstickBtn);
+            UserProfile profile;
+            ReadButton(tomlProfile["A"], profile.a);
+            ReadButton(tomlProfile["B"], profile.b);
+            ReadButton(tomlProfile["X"], profile.x);
+            ReadButton(tomlProfile["Y"], profile.y);
+            ReadButton(tomlProfile["LB"], profile.lb);
+            ReadButton(tomlProfile["RB"], profile.rb);
+            ReadButton(tomlProfile["LT"], profile.lt);
+            ReadButton(tomlProfile["RT"], profile.rt);
+            ReadButton(tomlProfile["Start"], profile.start);
+            ReadButton(tomlProfile["Back"], profile.back);
+            ReadButton(tomlProfile["DpadUp"], profile.dpadUp);
+            ReadButton(tomlProfile["DpadDown"], profile.dpadDown);
+            ReadButton(tomlProfile["DpadLeft"], profile.dpadLeft);
+            ReadButton(tomlProfile["DpadRight"], profile.dpadRight);
+            ReadJoystick(tomlProfile["LStick"], profile.lstick, profile.rstickBtn);
+            ReadJoystick(tomlProfile["RStick"], profile.rstick, profile.lstickBtn);
 
             config.profiles.try_emplace(std::string(name), std::move(profile));
         }
