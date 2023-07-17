@@ -88,6 +88,9 @@ static void ReadJoystick(toml::node_view<const toml::node> t, UserProfile::Joyst
 Config LoadConfig(const toml::table& toml) noexcept {
     Config config;
 
+    // This should map nothing, effectively hiding this gamepad slot
+    config.profiles.emplace("NULL"sv, UserProfile{});
+
     config.mouseCheckFrequency = toml["General"]["MouseCheckFrequency"].value_or<int>(75);
     config.hotkeyShowUI = KeyCodeFromString(toml["HotKeys"]["ShowUI"].value_or<std::string_view>(""sv)).value_or(0xFF);
 
@@ -116,7 +119,10 @@ Config LoadConfig(const toml::table& toml) noexcept {
             ReadJoystick(tomlProfile["LStick"], profile.lstick, profile.rstickBtn);
             ReadJoystick(tomlProfile["RStick"], profile.rstick, profile.lstickBtn);
 
-            config.profiles.try_emplace(std::string(name), std::move(profile));
+            auto [DISCARD, success] = config.profiles.try_emplace(std::string(name), std::move(profile));
+            if (!success) {
+                LOG_DEBUG(L"User profile '{}' already exists, cannot add", Utf8ToWide(name));
+            }
         }
     }
 

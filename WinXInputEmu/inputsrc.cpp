@@ -71,6 +71,10 @@ void InputTranslationStruct::ClearAll() {
 }
 
 void InputTranslationStruct::PopulateBtnLut(int userIndex, const UserProfile& profile) {
+    // Clear
+    for (auto& btn : btns[userIndex])
+        btn = XiButton::None;
+
     using enum XiButton;
 #define BTN(KEY_ENUM, THE_BTN) if (THE_BTN.keyCode != 0xFF) btns[userIndex][THE_BTN.keyCode] = KEY_ENUM;
     BTN(A, profile.a);
