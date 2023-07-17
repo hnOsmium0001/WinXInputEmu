@@ -202,7 +202,7 @@ static void DoMouse2Joystick(InputTranslationStruct& its) {
             if (r > conf.sensitivity * kOuterRadius) {
                 float num = r - conf.sensitivity * kOuterRadius;
                 float denom = kOuterRadius - conf.sensitivity * kOuterRadius;
-                SetJoystickPosition(phi, pow(num / denom, conf.nonLinear));
+                SetJoystickPosition(phi, pow(num / denom, conf.nonLinear), conf.invertXAxis, conf.invertYAxis, outX, outY);
             }
             else {
                 dev.lstickX = 0;
