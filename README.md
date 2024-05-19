@@ -1,5 +1,7 @@
 # WinXInputEmu
 
+You should probably use https://github.com/hnOsmium0001/WinXInputFeeder — it's much more featurful and less hacky, and requires less setup per-game (or per-emulator).
+
 An XInput emulation layer that supports conditionally generating gamepad from keyboard and mouse input.
 
 This is accomplished by renaming the dll provided by this project to one of the XInput dll names such as `xinput1_4.dll`, and dropping it into the application folder (where the .exe is located). This shadows the system dll, so our custom logic can intercept and process API calls from the application.
