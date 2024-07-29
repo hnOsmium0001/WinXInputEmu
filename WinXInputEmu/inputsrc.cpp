@@ -123,6 +123,7 @@ struct ThreadState {
     size_t rawinputSize = 0;
 
     bool blockingMessagePump = false;
+    bool capturingCursor = false;
 };
 
 static float Scale(float x, float lowerbound, float upperbound) {
@@ -304,6 +305,60 @@ static void HandleKeyPress(HANDLE hDevice, BYTE vkey, bool pressed, InputTransla
     }
 }
 
+static bool HandleHotkeys(BYTE vkey, ThreadState& s) {
+    if (vkey == gConfig.hotkeyShowUI) {
+        ShowWindow(s.mainWindow, SW_SHOWNORMAL);
+        SetFocus(s.mainWindow);
+        s.blockingMessagePump = false;
+
+        return true;
+    }
+    else if (vkey == gConfig.hotkeyCaptureCursor) {
+        if (auto hostHwnd = s.uiState->mainHostHwnd) {
+            if (s.capturingCursor) {
+                ClipCursor(nullptr);
+                ShowCursor(true);
+
+                s.capturingCursor = false;
+                LOG_DEBUG(L"Released cursor");
+            }
+            else {
+                // Get window-space rect of client area
+                RECT clientRect;
+                GetClientRect(hostHwnd, &clientRect);
+
+                POINT tl;
+                tl.x = clientRect.left;
+                tl.y = clientRect.top;
+                POINT br;
+                br.x = clientRect.right;
+                br.y = clientRect.bottom;
+
+                // Map window-space rect to screen-space
+                MapWindowPoints(hostHwnd, nullptr, &tl, 1);
+                MapWindowPoints(hostHwnd, nullptr, &br, 1);
+
+                RECT rect;
+                rect.left = tl.x;
+                rect.top = tl.y;
+                rect.right = br.x;
+                rect.bottom = br.y;
+                ClipCursor(&rect);
+                ShowCursor(false);
+
+                s.capturingCursor = true;
+                LOG_DEBUG(L"Captured cursor");
+            }
+        }
+        else {
+            LOG_DEBUG(L"Main game window not selected, cannot capture cursor");
+        }
+
+        return true;
+    }
+    return false;
+}
+
 static void CleanupRenderTarget(ThreadState& s) {
     if (s.mainRenderTargetView) {
         s.mainRenderTargetView->Release();
@@ -469,15 +524,11 @@ static LRESULT CALLBACK InputSrc_WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 
             bool press = !(kbd.Flags & RI_KEY_BREAK);
 
-            if (kbd.VKey == gConfig.hotkeyShowUI) {
-                ShowWindow(s.mainWindow, SW_SHOWNORMAL);
-                SetFocus(s.mainWindow);
-                s.blockingMessagePump = false;
-                break;
-            }
-
             // If any key is pressed...
             if (press) {
+                if (HandleHotkeys(kbd.VKey, s))
+                    break;
+
                 if (s.uiState->bindIdevFromNextKey != -1) {
                     gXiGamepads[s.uiState->bindIdevFromNextKey].srcKbd = ri->header.hDevice;
                     s.uiState->bindIdevFromNextKey = -1;

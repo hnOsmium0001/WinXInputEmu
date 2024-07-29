@@ -93,6 +93,7 @@ Config LoadConfig(const toml::table& toml) noexcept {
 
     config.mouseCheckFrequency = toml["General"]["MouseCheckFrequency"].value_or<int>(75);
     config.hotkeyShowUI = KeyCodeFromString(toml["HotKeys"]["ShowUI"].value_or<std::string_view>(""sv)).value_or(0xFF);
+    config.hotkeyCaptureCursor = KeyCodeFromString(toml["HotKeys"]["CaptureCursor"].value_or<std::string_view>(""sv)).value_or(0xFF);
 
     if (auto tomlProfiles = toml["UserProfiles"].as_table()) {
         for (auto&& [key, val] : *tomlProfiles) {

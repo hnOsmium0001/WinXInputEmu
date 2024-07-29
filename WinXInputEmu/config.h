@@ -60,6 +60,7 @@ struct Config {
     // Recommends 50-100
     int mouseCheckFrequency = 75;
     KeyCode hotkeyShowUI;
+    KeyCode hotkeyCaptureCursor;
 };
 
 // Container for all EventBus objects used for a given Config object

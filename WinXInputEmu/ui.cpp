@@ -7,14 +7,59 @@
 
 #include "userdevice.h"
 
+using namespace std::literals;
+
 #define FORMAT_GAMEPAD_NAME(VAR, USER_INDEX ) char VAR[256]; snprintf(VAR, sizeof(VAR), "Gamepad %d", (int)USER_INDEX);
 
+struct HostWindow {
+    std::string nameUtf8;
+    HWND hwnd;
+};
+
 struct UIStatePrivate {
+    std::vector<HostWindow> hostWindowList;
     int selectedUserIndex = -1;
     bool showDemoWindow = false;
 
     UIStatePrivate(UIState& s)
     {
+    }
+
+    void EnumHostWindows() {
+        hostWindowList.clear();
+
+        DWORD currProcessId = GetCurrentProcessId();
+        HANDLE handle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (handle == INVALID_HANDLE_VALUE)
+            return;
+        DEFER{ CloseHandle(handle); };
+
+        THREADENTRY32 te32;
+        te32.dwSize = sizeof(te32);
+
+        if (!Thread32First(handle, &te32))
+            return;
+
+        do {
+            if (te32.th32OwnerProcessID == currProcessId) {
+                EnumThreadWindows(te32.th32ThreadID, EnumThreadWindowsCallback, reinterpret_cast<LPARAM>(this));
+            }
+        } while (Thread32Next(handle, &te32));
+    }
+
+private:
+    static BOOL CALLBACK EnumThreadWindowsCallback(HWND hwnd, LPARAM lParam) {
+        auto self = reinterpret_cast<UIStatePrivate*>(lParam);
+
+        WCHAR nameWide[256];
+        int res = GetWindowTextW(hwnd, nameWide, IM_ARRAYSIZE(nameWide));
+        std::string nameUtf8 = res == 0
+            ? "<no name>"s
+            : WideToUtf8(std::wstring_view(nameWide, res));
+
+        self->hostWindowList.push_back(HostWindow{ std::move(nameUtf8), hwnd });
+
+        return true;
     }
 };
 
@@ -106,6 +151,21 @@ void ShowUI(UIState& s) {
     }
     else {
         ImGui::Text("Select a gamepad to show details");
+    }
+    ImGui::End();
+
+    ImGui::Begin("Game");
+    if (ImGui::Button("Enumerate host windows")) {
+        p.EnumHostWindows();
+    }
+    for (const auto& hostWindow : p.hostWindowList) {
+        char name[256];
+        snprintf(name, IM_ARRAYSIZE(name), "%p %s", hostWindow.hwnd, hostWindow.nameUtf8.c_str());
+
+        bool selected = hostWindow.hwnd == s.mainHostHwnd;
+        if (ImGui::Selectable(name, &selected)) {
+            s.mainHostHwnd = hostWindow.hwnd;
+        }
     }
     ImGui::End();
 

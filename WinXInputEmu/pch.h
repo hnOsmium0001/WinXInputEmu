@@ -38,6 +38,7 @@
 #include <d3d11.h>
 #include <Rpc.h>
 #include <hidusage.h>
+#include <tlhelp32.h>
 
 ////////// 3rd party headers //////////
 
